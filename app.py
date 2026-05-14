@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from sqlalchemy import create_engine
+import os
 
 # ====================================
 # CONFIGURACIÓN
@@ -43,29 +44,68 @@ h1, h2, h3 {
 """, unsafe_allow_html=True)
 
 # ====================================
-# CONEXIÓN SQLITE
+# SQLITE
 # ====================================
 
 engine = create_engine("sqlite:///ventas.db")
 
+# ====================================
+# CREAR BASE AUTOMÁTICAMENTE
+# ====================================
+
+if not os.path.exists("ventas.db"):
+
+    archivo_2024 = "VENTA 2024.xlsx"
+    archivo_2025 = "VENTA 2025.xlsx"
+
+    ventas_2024 = pd.read_excel(archivo_2024)
+    ventas_2025 = pd.read_excel(archivo_2025)
+
+    df_total = pd.concat(
+        [ventas_2024, ventas_2025],
+        ignore_index=True
+    )
+
+    # LIMPIAR COLUMNAS
+    df_total.columns = df_total.columns.str.strip()
+
+    # CAMBIAR NOMBRES SI ES NECESARIO
+    columnas = df_total.columns.tolist()
+
+    # AJUSTA ESTOS NOMBRES SI TU EXCEL ES DIFERENTE
+    if 'fecha' not in columnas:
+        df_total.rename(columns={columnas[0]: 'fecha'}, inplace=True)
+
+    if 'cantidad' not in columnas:
+        df_total.rename(columns={columnas[1]: 'cantidad'}, inplace=True)
+
+    # FECHAS
+    df_total['fecha'] = pd.to_datetime(df_total['fecha'])
+
+    df_total['anio'] = df_total['fecha'].dt.year
+    df_total['mes'] = df_total['fecha'].dt.month
+    df_total['dia'] = df_total['fecha'].dt.day
+    df_total['fecha_dia'] = df_total['fecha'].dt.date
+
+    # SQLITE
+    df_total.to_sql(
+        'ventas',
+        engine,
+        if_exists='replace',
+        index=False
+    )
+
+# ====================================
+# LEER SQLITE
+# ====================================
+
 df = pd.read_sql("SELECT * FROM ventas", engine)
-
-# ====================================
-# VALIDAR COLUMNAS
-# ====================================
-
-df.columns = df.columns.str.strip()
 
 # ====================================
 # FECHAS
 # ====================================
 
 df['fecha'] = pd.to_datetime(df['fecha'])
-
-df['anio'] = df['fecha'].dt.year
-df['mes'] = df['fecha'].dt.month
-df['dia'] = df['fecha'].dt.day
-df['fecha_dia'] = df['fecha'].dt.date
 
 # ====================================
 # SIDEBAR
@@ -113,7 +153,7 @@ col2.metric(
 )
 
 # ====================================
-# VENTAS POR AÑO
+# AÑO
 # ====================================
 
 st.subheader("📈 Ventas por Año")
@@ -135,7 +175,7 @@ fig_anio = px.bar(
 st.plotly_chart(fig_anio, use_container_width=True)
 
 # ====================================
-# VENTAS POR MES
+# MES
 # ====================================
 
 st.subheader("📅 Ventas por Mes")
@@ -158,7 +198,7 @@ fig_mes = px.line(
 st.plotly_chart(fig_mes, use_container_width=True)
 
 # ====================================
-# VENTAS DIARIAS
+# DÍA
 # ====================================
 
 st.subheader("📊 Ventas Diarias")
