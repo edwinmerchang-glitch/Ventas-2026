@@ -52,12 +52,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    h2 {
-        border-left: 4px solid #3b82f6;
-        padding-left: 1rem;
-        margin-top: 1rem;
-    }
-    
     /* KPI Cards corporativas */
     .kpi {
         background: white;
@@ -67,11 +61,6 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
         transition: all 0.3s ease;
         border-top: 4px solid #3b82f6;
-    }
-    
-    .kpi:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     
     .kpi h3 {
@@ -124,47 +113,9 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    /* Estilo para tabla comparativa */
-    .comparative-table {
-        background: white;
-        border-radius: 12px;
-        overflow-x: auto;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    
-    .comparative-table table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    
-    .comparative-table th {
-        background: #3b82f6;
-        color: white;
-        padding: 12px;
-        text-align: center;
-        font-weight: 600;
-        position: sticky;
-        top: 0;
-    }
-    
-    .comparative-table td {
-        padding: 10px;
-        border-bottom: 1px solid #e2e8f0;
-        text-align: center;
-    }
-    
-    .comparative-table tr:hover {
-        background: #f8fafc;
-    }
-    
-    .negative-variation {
-        color: #dc2626;
-        font-weight: 600;
-    }
-    
-    .positive-variation {
-        color: #10b981;
-        font-weight: 600;
+    /* Estilo para tabla */
+    .dataframe {
+        font-size: 0.9rem;
     }
     
     /* Footer */
@@ -336,7 +287,7 @@ def cargar_datos_ejemplo():
                 'cantidad': 1
             })
     
-    # Generar datos para 2025 (menor cantidad para mostrar decrecimiento)
+    # Generar datos para 2025
     for producto in productos:
         ventas_2025 = np.random.randint(1, 10)
         for _ in range(ventas_2025):
@@ -391,26 +342,28 @@ def crear_tabla_comparativa(df, top_n=None):
     # Renombrar columnas para mejor presentación
     tabla_comparativa.columns = ['producto', 'ventas_2024', 'ventas_2025', 'diferencia', 'variacion_porcentaje']
     
-    # Ordenar por diferencia (mayor caída primero) o por ventas 2024
+    # Ordenar por ventas 2024 (mayor a menor)
     tabla_comparativa = tabla_comparativa.sort_values('ventas_2024', ascending=False)
     
     # Filtrar productos con ventas > 0
     tabla_comparativa = tabla_comparativa[(tabla_comparativa['ventas_2024'] > 0) | (tabla_comparativa['ventas_2025'] > 0)]
     
     # Limitar a top N si se especifica
-    if top_n:
+    if top_n and top_n != "Todos":
         tabla_comparativa = tabla_comparativa.head(top_n)
     
     # Agregar fila de total
+    total_ventas_2024 = tabla_comparativa['ventas_2024'].sum()
+    total_ventas_2025 = tabla_comparativa['ventas_2025'].sum()
+    total_diferencia = total_ventas_2025 - total_ventas_2024
+    total_variacion = ((total_ventas_2025 - total_ventas_2024) / total_ventas_2024 * 100) if total_ventas_2024 > 0 else 0
+    
     total_row = pd.DataFrame({
         'producto': ['**TOTAL**'],
-        'ventas_2024': [tabla_comparativa['ventas_2024'].sum()],
-        'ventas_2025': [tabla_comparativa['ventas_2025'].sum()],
-        'diferencia': [tabla_comparativa['diferencia'].sum()],
-        'variacion_porcentaje': [
-            ((tabla_comparativa['ventas_2025'].sum() - tabla_comparativa['ventas_2024'].sum()) / 
-             tabla_comparativa['ventas_2024'].sum() * 100) if tabla_comparativa['ventas_2024'].sum() > 0 else 0
-        ]
+        'ventas_2024': [total_ventas_2024],
+        'ventas_2025': [total_ventas_2025],
+        'diferencia': [total_diferencia],
+        'variacion_porcentaje': [total_variacion]
     })
     
     tabla_comparativa = pd.concat([tabla_comparativa, total_row], ignore_index=True)
@@ -482,12 +435,16 @@ def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
     
     pdf.set_font("Arial", "", 8)
     for _, row in tabla_comparativa.head(25).iterrows():
-        producto = row['producto'][:50]  # Limitar longitud
+        producto = row['producto'][:50] if row['producto'] != '**TOTAL**' else row['producto']
         pdf.cell(80, 7, producto, 1, 0)
         pdf.cell(25, 7, f"{int(row['ventas_2024']):,}", 1, 0, 'R')
         pdf.cell(25, 7, f"{int(row['ventas_2025']):,}", 1, 0, 'R')
         pdf.cell(25, 7, f"{int(row['diferencia']):,}", 1, 0, 'R')
-        pdf.cell(30, 7, f"{row['variacion_porcentaje']:.1f}%", 1, 1, 'R')
+        
+        # Color para variación
+        variacion = row['variacion_porcentaje']
+        variacion_str = f"{variacion:.1f}%"
+        pdf.cell(30, 7, variacion_str, 1, 1, 'R')
     
     return pdf.output(dest='S').encode('latin1')
 
@@ -612,18 +569,22 @@ def mostrar_kpis(filtro):
 
 def mostrar_tabla_comparativa(tabla_comparativa):
     st.markdown("### 📊 Comparativo de Ventas por Producto")
-    st.markdown("*Análisis similar a Power BI - 2024 vs 2025*")
+    st.markdown("*Análisis 2024 vs 2025 - Estilo Power BI*")
     
     # Selector de cantidad de filas
     col1, col2 = st.columns([3, 1])
     with col2:
         top_n = st.selectbox("Mostrar top", [20, 50, 100, "Todos"], index=0)
     
-    # Filtrar tabla
+    # Filtrar tabla según selección
     if top_n != "Todos":
-        tabla_mostrar = tabla_comparativa.head(top_n)
+        # Excluir total temporalmente para el filtro
+        sin_total = tabla_comparativa[tabla_comparativa['producto'] != '**TOTAL**'].copy()
+        sin_total_filtrado = sin_total.head(top_n)
+        total_row = tabla_comparativa[tabla_comparativa['producto'] == '**TOTAL**'].copy()
+        tabla_mostrar = pd.concat([sin_total_filtrado, total_row], ignore_index=True)
     else:
-        tabla_mostrar = tabla_comparativa
+        tabla_mostrar = tabla_comparativa.copy()
     
     # Formatear la tabla para mostrar
     tabla_formateada = tabla_mostrar.copy()
@@ -637,9 +598,9 @@ def mostrar_tabla_comparativa(tabla_comparativa):
     # Renombrar columnas para mejor visualización
     tabla_formateada.columns = ['Producto', 'Ventas 2024', 'Ventas 2025', 'Diferencia', 'Variación %']
     
-    # Estilizar la tabla con colores
-    def color_variacion(val):
-        if isinstance(val, str) and '%' in val:
+    # Aplicar formato condicional con colores usando map (nueva forma)
+    def color_variacion_series(val):
+        if isinstance(val, str) and '%' in val and val != '0.0%':
             try:
                 num = float(val.replace('%', ''))
                 if num < 0:
@@ -650,8 +611,16 @@ def mostrar_tabla_comparativa(tabla_comparativa):
                 pass
         return ''
     
-    # Aplicar estilo
-    styled_df = tabla_formateada.style.applymap(color_variacion, subset=['Variación %'])
+    # Aplicar estilo usando map (método actualizado)
+    styled_df = tabla_formateada.style.map(color_variacion_series, subset=['Variación %'])
+    
+    # Configurar formato de números
+    styled_df = styled_df.format({
+        'Ventas 2024': lambda x: x,
+        'Ventas 2025': lambda x: x,
+        'Diferencia': lambda x: x,
+        'Variación %': lambda x: x
+    })
     
     # Mostrar tabla
     st.dataframe(
@@ -661,44 +630,49 @@ def mostrar_tabla_comparativa(tabla_comparativa):
         hide_index=True
     )
     
-    # Mostrar resumen de la tabla
-    st.caption(f"📊 Total productos analizados: {len(tabla_comparativa) - 1} | "
-               f"Total ventas 2024: {int(tabla_comparativa[tabla_comparativa['producto'] != '**TOTAL**']['ventas_2024'].sum()):,} | "
-               f"Total ventas 2025: {int(tabla_comparativa[tabla_comparativa['producto'] != '**TOTAL**']['ventas_2025'].sum()):,}")
+    # Mostrar resumen
+    total_row_data = tabla_mostrar[tabla_mostrar['Producto'] == '**TOTAL**']
+    if len(total_row_data) > 0:
+        st.info(f"📊 **Resumen General:** Total ventas 2024: {total_row_data['Ventas 2024'].values[0]} | "
+               f"Total ventas 2025: {total_row_data['Ventas 2025'].values[0]} | "
+               f"Variación total: {total_row_data['Variación %'].values[0]}")
 
 # ======================================
 # GRÁFICO DE BARRAS COMPARATIVO
 # ======================================
 
 def mostrar_grafico_comparativo(tabla_comparativa):
-    st.markdown("### 📈 Top Productos con Mayor Caída")
+    st.markdown("### 📈 Top Productos con Mayor Volumen de Ventas")
     
-    # Excluir total y tomar top 10 con mayor caída
-    top_caidas = tabla_comparativa[
+    # Excluir total y tomar top 10
+    top_productos = tabla_comparativa[
         (tabla_comparativa['producto'] != '**TOTAL**') & 
         (tabla_comparativa['ventas_2024'] > 0)
     ].head(10).copy()
     
-    if len(top_caidas) > 0:
+    if len(top_productos) > 0:
         fig = go.Figure()
+        
+        # Acortar nombres de productos para mejor visualización
+        productos_short = top_productos['producto'].apply(lambda x: x[:40] + '...' if len(x) > 40 else x)
         
         # Barras para 2024
         fig.add_trace(go.Bar(
             name='Ventas 2024',
-            x=top_caidas['producto'].str[:40] + '...',
-            y=top_caidas['ventas_2024'],
+            x=productos_short,
+            y=top_productos['ventas_2024'],
             marker_color='#3b82f6',
-            text=top_caidas['ventas_2024'],
+            text=top_productos['ventas_2024'],
             textposition='outside'
         ))
         
         # Barras para 2025
         fig.add_trace(go.Bar(
             name='Ventas 2025',
-            x=top_caidas['producto'].str[:40] + '...',
-            y=top_caidas['ventas_2025'],
+            x=productos_short,
+            y=top_productos['ventas_2025'],
             marker_color='#ef4444',
-            text=top_caidas['ventas_2025'],
+            text=top_productos['ventas_2025'],
             textposition='outside'
         ))
         
@@ -830,7 +804,7 @@ def main():
         
         # Título
         st.markdown("# 📊 Dashboard Comparativo de Ventas")
-        st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Power BI Style")
+        st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         
         # Mostrar filtros activos
         with st.expander("🔍 Filtros activos", expanded=False):
@@ -847,7 +821,7 @@ def main():
         
         st.markdown("---")
         
-        # Tabla comparativa principal (similar a Power BI)
+        # Tabla comparativa principal
         mostrar_tabla_comparativa(tabla_comparativa)
         
         st.markdown("---")
