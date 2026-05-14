@@ -124,32 +124,47 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    /* Dataframe estilo corporativo */
-    .stDataFrame {
-        border-radius: 8px;
-        border: 1px solid #e2e8f0;
+    /* Estilo para tabla comparativa */
+    .comparative-table {
+        background: white;
+        border-radius: 12px;
+        overflow-x: auto;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
-    /* Selectores corporativos */
-    .stSelectbox label, .stMultiSelect label {
-        color: #ffffff !important;
-        font-weight: 500;
-        font-size: 0.8rem;
+    .comparative-table table {
+        width: 100%;
+        border-collapse: collapse;
     }
     
-    /* Sidebar text color */
-    section[data-testid="stSidebar"] .stMarkdown {
-        color: #e2e8f0;
+    .comparative-table th {
+        background: #3b82f6;
+        color: white;
+        padding: 12px;
+        text-align: center;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
     }
     
-    section[data-testid="stSidebar"] h3 {
-        color: #ffffff !important;
-        font-size: 0.9rem;
+    .comparative-table td {
+        padding: 10px;
+        border-bottom: 1px solid #e2e8f0;
+        text-align: center;
     }
     
-    section[data-testid="stSidebar"] h4 {
-        color: #ffffff !important;
-        font-size: 0.8rem;
+    .comparative-table tr:hover {
+        background: #f8fafc;
+    }
+    
+    .negative-variation {
+        color: #dc2626;
+        font-weight: 600;
+    }
+    
+    .positive-variation {
+        color: #10b981;
+        font-weight: 600;
     }
     
     /* Footer */
@@ -170,9 +185,6 @@ st.markdown("""
         h1 {
             font-size: 1.5rem;
         }
-        .kpi {
-            padding: 0.8rem;
-        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -185,13 +197,9 @@ st.markdown("""
 def limpiar_dataframe(df):
     """Limpia el dataframe de valores erróneos"""
     
-    # Limpiar columna de año - asegurar que sea numérico
+    # Limpiar columna de año
     if 'anio' in df.columns:
         df['anio'] = pd.to_numeric(df['anio'], errors='coerce')
-    
-    # Limpiar columna de mes - asegurar que sea numérico
-    if 'mes' in df.columns:
-        df['mes'] = pd.to_numeric(df['mes'], errors='coerce')
     
     # Limpiar columna de cantidad
     if 'cantidad' in df.columns:
@@ -202,20 +210,19 @@ def limpiar_dataframe(df):
         df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
         df = df.dropna(subset=['fecha'])
         
-        # Recalcular año y mes si es necesario
+        # Recalcular año y mes
         df['anio'] = df['fecha'].dt.year
         df['mes'] = df['fecha'].dt.month
         df['mes_nombre'] = df['fecha'].dt.strftime('%B')
         df['dia'] = df['fecha'].dt.day
         df['trimestre'] = df['fecha'].dt.quarter
     
-    # Limpiar valores nulos en columnas importantes
+    # Limpiar valores nulos
     df['producto'] = df['producto'].fillna('No especificado').astype(str)
     df['marca'] = df['marca'].fillna('No especificada').astype(str)
     df['proveedor'] = df['proveedor'].fillna('No especificado').astype(str)
-    df['categoria'] = df['categoria'].fillna('General').astype(str)
     
-    # Eliminar filas donde el año sea inválido (NaN o fuera de rango)
+    # Eliminar filas donde el año sea inválido
     df = df.dropna(subset=['anio'])
     df = df[(df['anio'] >= 2000) & (df['anio'] <= 2030)]
     
@@ -259,7 +266,7 @@ def cargar_excel(file):
         # Buscar o crear columna de producto
         if 'producto' not in df.columns:
             for col in columnas:
-                if 'producto' in col or 'item' in col or 'articulo' in col:
+                if 'producto' in col or 'item' in col or 'codigo' in col:
                     df.rename(columns={col: 'producto'}, inplace=True)
                     break
             else:
@@ -283,15 +290,6 @@ def cargar_excel(file):
             else:
                 df['proveedor'] = 'General'
         
-        # Buscar columna de categoría si existe
-        if 'categoria' not in df.columns:
-            for col in columnas:
-                if 'categoria' in col or 'category' in col:
-                    df.rename(columns={col: 'categoria'}, inplace=True)
-                    break
-            else:
-                df['categoria'] = 'General'
-        
         # Aplicar limpieza de datos
         df = limpiar_dataframe(df)
         
@@ -301,25 +299,54 @@ def cargar_excel(file):
 
 @st.cache_data(ttl=3600)
 def cargar_datos_ejemplo():
-    """Genera datos de ejemplo para demostración con marcas y proveedores"""
+    """Genera datos de ejemplo para demostración"""
     np.random.seed(42)
     
-    fechas = pd.date_range('2024-01-01', '2025-12-31', freq='D')
-    productos = ['Producto A', 'Producto B', 'Producto C', 'Producto D', 'Producto E']
-    marcas = ['HAIKO NATURAL S.A.S.', 'Marca B', 'Marca C', 'Marca D']
-    proveedores = ['HAIKO NATURAL S.A.S.', 'Proveedor X', 'Proveedor Y', 'Proveedor Z']
-    categorias = ['Electrónica', 'Ropa', 'Hogar', 'Deportes', 'Juguetes']
+    # Crear datos similares a la imagen
+    productos = [
+        "019962797569 - CREATINE HEALTHY S.MONOHYD.3000MG X300G",
+        "0300651481228 - SYSTANE COMPLETE GOTAS.OFT.0.6X10ML",
+        "0300653610794 - SOLUC.DESINFEC.OPTI-FREE P.LENTES X90ML",
+        "039800088635 - BATERIA ENERGIZER BOTON DE LITIO CR2032",
+        "054402330821 - BRONCE.AUST.GOLD SPR.GEL FPS30 X237ML",
+        "0700083725400 - COLAGENO BELFAN HIDROLIZADO VLLA.X600G",
+        "0715134328936 - PROBIOTICO JARROW EPS CAP.X30",
+        "0715134328974 - JARRO-DOPHILUS EPS CAP.X60",
+        "0715134329087 - B-FORMULA CAP.X100",
+        "0715134329148 - OMEGA 3 CARLSON LIQUIDO NORUEGO X500ML",
+        "1000025250700 - REP BAND BANDA ELAST.#2 NARANJAX1.5MT",
+        "1000025250717 - REP BAND BANDA FI AST.#3 VFRDFX1.5MT"
+    ]
+    
+    marcas = ["COLGATE", "GENOMMA LAB", "HALEON", "ENERGIZER", "BELFAN", "JARROW"]
+    proveedores = ["COLGATE PALMOLIVE CIA", "GENOMMA LAB COLOMBIA LTDA", "HALEON COLOMBIA S.A.S"]
     
     data = []
-    for fecha in fechas:
-        for _ in range(np.random.randint(1, 3)):  # Reducido para mejor rendimiento
+    
+    # Generar datos para 2024
+    for producto in productos:
+        ventas_2024 = np.random.randint(1, 40)
+        for _ in range(ventas_2024):
+            fecha = pd.Timestamp(f"2024-{np.random.randint(1, 13)}-{np.random.randint(1, 28)}")
             data.append({
                 'fecha': fecha,
-                'producto': np.random.choice(productos),
+                'producto': producto,
                 'marca': np.random.choice(marcas),
                 'proveedor': np.random.choice(proveedores),
-                'categoria': np.random.choice(categorias),
-                'cantidad': np.random.randint(1, 50)
+                'cantidad': 1
+            })
+    
+    # Generar datos para 2025 (menor cantidad para mostrar decrecimiento)
+    for producto in productos:
+        ventas_2025 = np.random.randint(1, 10)
+        for _ in range(ventas_2025):
+            fecha = pd.Timestamp(f"2025-{np.random.randint(1, 13)}-{np.random.randint(1, 28)}")
+            data.append({
+                'fecha': fecha,
+                'producto': producto,
+                'marca': np.random.choice(marcas),
+                'proveedor': np.random.choice(proveedores),
+                'cantidad': 1
             })
     
     df = pd.DataFrame(data)
@@ -328,262 +355,227 @@ def cargar_datos_ejemplo():
     return df
 
 # ======================================
+# FUNCIÓN PARA CREAR TABLA COMPARATIVA
+# ======================================
+
+@st.cache_data(ttl=300)
+def crear_tabla_comparativa(df, top_n=None):
+    """Crea tabla comparativa de productos similar a Power BI"""
+    
+    # Agrupar por producto y año
+    ventas_producto = df.groupby(['producto', 'anio'])['cantidad'].sum().reset_index()
+    
+    # Pivotar para tener 2024 y 2025 como columnas
+    tabla_pivot = ventas_producto.pivot(index='producto', columns='anio', values='cantidad').fillna(0)
+    
+    # Renombrar columnas
+    tabla_pivot.columns = [f'ventas_{int(col)}' for col in tabla_pivot.columns]
+    
+    # Asegurar que existen ambas columnas
+    if 'ventas_2024' not in tabla_pivot.columns:
+        tabla_pivot['ventas_2024'] = 0
+    if 'ventas_2025' not in tabla_pivot.columns:
+        tabla_pivot['ventas_2025'] = 0
+    
+    # Calcular diferencia y variación
+    tabla_pivot['diferencia'] = tabla_pivot['ventas_2025'] - tabla_pivot['ventas_2024']
+    tabla_pivot['variacion_porcentaje'] = np.where(
+        tabla_pivot['ventas_2024'] > 0,
+        (tabla_pivot['diferencia'] / tabla_pivot['ventas_2024']) * 100,
+        0
+    )
+    
+    # Reset index para tener producto como columna
+    tabla_comparativa = tabla_pivot.reset_index()
+    
+    # Renombrar columnas para mejor presentación
+    tabla_comparativa.columns = ['producto', 'ventas_2024', 'ventas_2025', 'diferencia', 'variacion_porcentaje']
+    
+    # Ordenar por diferencia (mayor caída primero) o por ventas 2024
+    tabla_comparativa = tabla_comparativa.sort_values('ventas_2024', ascending=False)
+    
+    # Filtrar productos con ventas > 0
+    tabla_comparativa = tabla_comparativa[(tabla_comparativa['ventas_2024'] > 0) | (tabla_comparativa['ventas_2025'] > 0)]
+    
+    # Limitar a top N si se especifica
+    if top_n:
+        tabla_comparativa = tabla_comparativa.head(top_n)
+    
+    # Agregar fila de total
+    total_row = pd.DataFrame({
+        'producto': ['**TOTAL**'],
+        'ventas_2024': [tabla_comparativa['ventas_2024'].sum()],
+        'ventas_2025': [tabla_comparativa['ventas_2025'].sum()],
+        'diferencia': [tabla_comparativa['diferencia'].sum()],
+        'variacion_porcentaje': [
+            ((tabla_comparativa['ventas_2025'].sum() - tabla_comparativa['ventas_2024'].sum()) / 
+             tabla_comparativa['ventas_2024'].sum() * 100) if tabla_comparativa['ventas_2024'].sum() > 0 else 0
+        ]
+    })
+    
+    tabla_comparativa = pd.concat([tabla_comparativa, total_row], ignore_index=True)
+    
+    return tabla_comparativa
+
+# ======================================
 # FUNCIONES DE EXPORTACIÓN
 # ======================================
 
-def exportar_excel(df):
+def exportar_excel(df, tabla_comparativa):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        # Limitar a 10000 filas para evitar problemas de rendimiento
-        df_to_export = df.head(10000)
-        df_to_export.to_excel(writer, sheet_name='Ventas', index=False)
+        # Hoja de detalle de ventas
+        df.head(10000).to_excel(writer, sheet_name='Detalle_Ventas', index=False)
+        
+        # Hoja de tabla comparativa
+        tabla_comparativa.to_excel(writer, sheet_name='Comparativo_Productos', index=False)
+        
+        # Dar formato
+        workbook = writer.book
+        header_format = workbook.add_format({
+            'bold': True,
+            'bg_color': '#3b82f6',
+            'font_color': 'white'
+        })
+        
+        for sheet_name in writer.sheets:
+            worksheet = writer.sheets[sheet_name]
+            for col_num, value in enumerate(tabla_comparativa.columns):
+                worksheet.write(0, col_num, value, header_format)
+                worksheet.set_column(col_num, col_num, 20)
     
     output.seek(0)
     return output
 
-def exportar_pdf(df, kpis, filtros_aplicados):
+def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
     pdf = FPDF()
     pdf.add_page()
     
-    # Configurar estilo corporativo
+    # Configurar estilo
     pdf.set_fill_color(59, 130, 246)
     pdf.set_text_color(30, 41, 59)
     
     # Título
     pdf.set_font("Arial", "B", 20)
-    pdf.cell(0, 15, "Reporte Ejecutivo de Ventas", 0, 1, "C")
+    pdf.cell(0, 15, "Reporte Comparativo de Ventas por Producto", 0, 1, "C")
     pdf.set_font("Arial", "", 9)
     pdf.cell(0, 8, f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}", 0, 1, "C")
     pdf.ln(5)
-    
-    # Filtros aplicados (resumidos)
-    pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 8, "Filtros Aplicados:", 0, 1)
-    pdf.set_font("Arial", "", 8)
-    
-    filtros_resumidos = {
-        'Fechas': filtros_aplicados.get('Rango de fechas', 'Todos')[:50],
-        'Años': filtros_aplicados.get('Años', 'Todos')[:50],
-        'Marcas': filtros_aplicados.get('Marcas', 'Todas')[:50]
-    }
-    
-    for key, value in filtros_resumidos.items():
-        pdf.cell(0, 5, f"{key}: {value}", 0, 1)
-    
-    pdf.ln(8)
     
     # KPIs
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 8, "Indicadores Clave", 0, 1)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 7, f"Total Ventas: {kpis['total']:,} unidades", 0, 1)
-    pdf.cell(0, 7, f"Ventas 2024: {kpis['v2024']:,} unidades", 0, 1)
-    pdf.cell(0, 7, f"Ventas 2025: {kpis['v2025']:,} unidades", 0, 1)
+    pdf.cell(0, 7, f"Total Ventas 2024: {kpis['v2024']:,} unidades", 0, 1)
+    pdf.cell(0, 7, f"Total Ventas 2025: {kpis['v2025']:,} unidades", 0, 1)
     pdf.cell(0, 7, f"Crecimiento: {kpis['crecimiento']:.1f}%", 0, 1)
+    
+    pdf.ln(8)
+    
+    # Tabla comparativa (top 20 para PDF)
+    pdf.set_font("Arial", "B", 9)
+    pdf.cell(80, 8, "Producto", 1, 0, 'C')
+    pdf.cell(25, 8, "Ventas 2024", 1, 0, 'C')
+    pdf.cell(25, 8, "Ventas 2025", 1, 0, 'C')
+    pdf.cell(25, 8, "Diferencia", 1, 0, 'C')
+    pdf.cell(30, 8, "Variación %", 1, 1, 'C')
+    
+    pdf.set_font("Arial", "", 8)
+    for _, row in tabla_comparativa.head(25).iterrows():
+        producto = row['producto'][:50]  # Limitar longitud
+        pdf.cell(80, 7, producto, 1, 0)
+        pdf.cell(25, 7, f"{int(row['ventas_2024']):,}", 1, 0, 'R')
+        pdf.cell(25, 7, f"{int(row['ventas_2025']):,}", 1, 0, 'R')
+        pdf.cell(25, 7, f"{int(row['diferencia']):,}", 1, 0, 'R')
+        pdf.cell(30, 7, f"{row['variacion_porcentaje']:.1f}%", 1, 1, 'R')
     
     return pdf.output(dest='S').encode('latin1')
 
 # ======================================
-# FILTROS AVANZADOS OPTIMIZADOS
+# FILTROS AVANZADOS
 # ======================================
 
 def aplicar_filtros(df):
     st.sidebar.markdown("### 📊 Panel de Control")
     st.sidebar.markdown("---")
     
-    # ===== SECCIÓN FECHAS =====
-    st.sidebar.markdown("#### 📅 Filtros de Fecha")
-    
-    # Obtener fechas mínima y máxima
-    fecha_min = df['fecha'].min().date()
-    fecha_max = df['fecha'].max().date()
-    
-    # Selector de rango de fechas
-    rango_fechas = st.sidebar.date_input(
-        "📆 Rango de Fechas",
-        [fecha_min, fecha_max],
-        min_value=fecha_min,
-        max_value=fecha_max,
-        key="rango_fechas"
-    )
-    
-    # Filtro de año - con manejo de valores vacíos
+    # Filtro de año
     anios = sorted(df['anio'].dropna().unique())
     anios = [a for a in anios if isinstance(a, (int, float)) and a >= 2000]
     
-    default_anios = anios if anios else []
     anio_seleccionado = st.sidebar.multiselect(
         "📅 Años",
         options=anios,
-        default=default_anios,
+        default=anios if anios else [],
         key="anios"
     )
     
-    # Filtro de mes
-    nombres_meses = {
-        1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
-        5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
-        9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
-    }
-    
-    meses_disponibles = sorted([m for m in df['mes'].dropna().unique() if m in nombres_meses])
-    meses_nombres = [f"{m} - {nombres_meses[m]}" for m in meses_disponibles]
-    
-    default_meses = meses_nombres if meses_nombres else []
-    meses_seleccionados = st.sidebar.multiselect(
-        "📆 Meses",
-        options=meses_nombres,
-        default=default_meses,
-        key="meses"
-    )
-    
-    # Convertir selección de meses
-    meses_filtro = []
-    for m in meses_seleccionados:
-        try:
-            meses_filtro.append(int(m.split(' - ')[0]))
-        except:
-            pass
-    
-    st.sidebar.markdown("---")
-    
-    # ===== SECCIÓN MARCAS =====
-    st.sidebar.markdown("#### 🏷️ Filtros de Marca")
-    
-    # Obtener marcas únicas (excluyendo valores no deseados)
-    marcas_disponibles = sorted([m for m in df['marca'].unique() if m not in ['No especificada', 'General', 'ZUZUS']])
-    default_marcas = marcas_disponibles if marcas_disponibles else []
-    
+    # Filtro de marca
+    marcas_disponibles = sorted([m for m in df['marca'].unique() if m not in ['No especificada', 'General']])
     marcas_seleccionadas = st.sidebar.multiselect(
-        "🎯 Marcas",
+        "🏷️ Marcas",
         options=marcas_disponibles,
-        default=default_marcas,
-        key="marcas",
-        help="Filtrar por marca específica"
+        default=marcas_disponibles if marcas_disponibles else [],
+        key="marcas"
     )
     
-    st.sidebar.markdown("---")
-    
-    # ===== SECCIÓN PROVEEDORES =====
-    st.sidebar.markdown("#### 🏭 Filtros de Proveedor")
-    
+    # Filtro de proveedor
     proveedores_disponibles = sorted([p for p in df['proveedor'].unique() if p not in ['No especificado', 'General']])
-    default_proveedores = proveedores_disponibles if proveedores_disponibles else []
-    
     proveedores_seleccionados = st.sidebar.multiselect(
-        "📦 Proveedores",
+        "🏭 Proveedores",
         options=proveedores_disponibles,
-        default=default_proveedores,
-        key="proveedores",
-        help="Filtrar por proveedor específico"
+        default=proveedores_disponibles if proveedores_disponibles else [],
+        key="proveedores"
     )
     
     st.sidebar.markdown("---")
     
-    # ===== SECCIÓN PRODUCTOS =====
-    st.sidebar.markdown("#### 📦 Filtros de Producto")
-    
-    productos_disponibles = sorted([p for p in df['producto'].unique() if p not in ['No especificado', 'General']])[:50]  # Limitar a 50 para rendimiento
-    default_productos = productos_disponibles if productos_disponibles else []
-    
-    producto_seleccionado = st.sidebar.multiselect(
-        "📦 Productos",
-        options=productos_disponibles,
-        default=default_productos,
-        key="productos"
-    )
-    
-    # Filtro de categoría
-    categorias_disponibles = sorted([c for c in df['categoria'].unique() if c not in ['General']])
-    default_categorias = categorias_disponibles if categorias_disponibles else []
-    
-    categoria_seleccionada = st.sidebar.multiselect(
-        "🏷️ Categorías",
-        options=categorias_disponibles,
-        default=default_categorias,
-        key="categorias"
-    )
-    
-    st.sidebar.markdown("---")
-    
-    # Aplicar filtros de manera eficiente
+    # Aplicar filtros
     filtro = df.copy()
     
-    # Aplicar filtro de rango de fechas
-    if len(rango_fechas) == 2:
-        mask = (filtro['fecha'].dt.date >= rango_fechas[0]) & (filtro['fecha'].dt.date <= rango_fechas[1])
-        filtro = filtro[mask]
-    
-    # Aplicar filtro de años
     if anio_seleccionado:
         filtro = filtro[filtro['anio'].isin(anio_seleccionado)]
     
-    # Aplicar filtro de meses
-    if meses_filtro:
-        filtro = filtro[filtro['mes'].isin(meses_filtro)]
-    
-    # Aplicar filtro de marcas
     if marcas_seleccionadas:
         filtro = filtro[filtro['marca'].isin(marcas_seleccionadas)]
     
-    # Aplicar filtro de proveedores
     if proveedores_seleccionados:
         filtro = filtro[filtro['proveedor'].isin(proveedores_seleccionados)]
     
-    # Aplicar filtro de productos
-    if producto_seleccionado:
-        filtro = filtro[filtro['producto'].isin(producto_seleccionado)]
-    
-    # Aplicar filtro de categorías
-    if categoria_seleccionada:
-        filtro = filtro[filtro['categoria'].isin(categoria_seleccionada)]
-    
-    # Mostrar estadísticas de filtros en sidebar
+    # Estadísticas
     with st.sidebar.expander("📈 Estadísticas", expanded=False):
         st.metric("Registros", f"{len(filtro):,}")
+        st.metric("Productos", filtro['producto'].nunique())
         st.metric("Ventas totales", f"{int(filtro['cantidad'].sum()):,}")
     
-    # Guardar filtros aplicados para exportación
     filtros_dict = {
-        'Rango de fechas': f"{rango_fechas[0]} a {rango_fechas[1]}" if len(rango_fechas) == 2 else "Todos",
         'Años': ', '.join([str(a) for a in anio_seleccionado]) if anio_seleccionado else "Todos",
-        'Marcas': ', '.join([str(m) for m in marcas_seleccionadas[:3]]) + ('...' if len(marcas_seleccionadas) > 3 else '') if marcas_seleccionadas else "Todas",
-        'Proveedores': ', '.join([str(p) for p in proveedores_seleccionados[:3]]) + ('...' if len(proveedores_seleccionados) > 3 else '') if proveedores_seleccionados else "Todos",
+        'Marcas': ', '.join(marcas_seleccionadas[:3]) + ('...' if len(marcas_seleccionadas) > 3 else '') if marcas_seleccionadas else "Todas",
+        'Proveedores': ', '.join(proveedores_seleccionados[:3]) + ('...' if len(proveedores_seleccionados) > 3 else '') if proveedores_seleccionados else "Todos",
     }
     
     return filtro, filtros_dict
 
 # ======================================
-# KPIS OPTIMIZADOS
+# KPIS
 # ======================================
 
 def mostrar_kpis(filtro):
-    # Calcular KPIs de forma eficiente
     ventas_total = int(filtro['cantidad'].sum())
-    
-    ventas_2024 = 0
-    ventas_2025 = 0
-    
-    if 2024 in filtro['anio'].values:
-        ventas_2024 = int(filtro[filtro['anio'] == 2024]['cantidad'].sum())
-    if 2025 in filtro['anio'].values:
-        ventas_2025 = int(filtro[filtro['anio'] == 2025]['cantidad'].sum())
+    ventas_2024 = int(filtro[filtro['anio'] == 2024]['cantidad'].sum()) if 2024 in filtro['anio'].values else 0
+    ventas_2025 = int(filtro[filtro['anio'] == 2025]['cantidad'].sum()) if 2025 in filtro['anio'].values else 0
     
     if ventas_2024 > 0:
         crecimiento = ((ventas_2025 - ventas_2024) / ventas_2024) * 100
     else:
         crecimiento = 0
     
-    # KPIs adicionales
-    marcas_unicas = filtro['marca'].nunique()
-    proveedores_unicos = filtro['proveedor'].nunique()
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.markdown(f"""
         <div class="kpi">
-            <h3>📊 Total</h3>
+            <h3>📊 Total Unidades</h3>
             <div class="value">{ventas_total:,}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -591,7 +583,7 @@ def mostrar_kpis(filtro):
     with col2:
         st.markdown(f"""
         <div class="kpi">
-            <h3>📈 2024</h3>
+            <h3>📈 Ventas 2024</h3>
             <div class="value">{ventas_2024:,}</div>
         </div>
         """, unsafe_allow_html=True)
@@ -599,27 +591,11 @@ def mostrar_kpis(filtro):
     with col3:
         st.markdown(f"""
         <div class="kpi">
-            <h3>🚀 2025</h3>
+            <h3>🚀 Ventas 2025</h3>
             <div class="value">{ventas_2025:,}</div>
             <div class="growth {'growth-positive' if crecimiento >= 0 else 'growth-negative'}">
                 {crecimiento:.1f}%
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown(f"""
-        <div class="kpi">
-            <h3>🏷️ Marcas</h3>
-            <div class="value">{marcas_unicas}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col5:
-        st.markdown(f"""
-        <div class="kpi">
-            <h3>🏭 Proveedores</h3>
-            <div class="value">{proveedores_unicos}</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -631,160 +607,139 @@ def mostrar_kpis(filtro):
     }
 
 # ======================================
-# GRÁFICOS OPTIMIZADOS
+# TABLA COMPARATIVA ESTILO POWER BI
 # ======================================
 
-@st.cache_data(ttl=300)
-def preparar_datos_graficos(filtro):
-    """Prepara los datos para los gráficos de forma cacheada"""
-    ventas_anio = filtro.groupby('anio')['cantidad'].sum().reset_index()
-    ventas_mes = filtro.groupby(['anio', 'mes_nombre', 'mes'])['cantidad'].sum().reset_index()
-    ventas_marca = filtro.groupby('marca')['cantidad'].sum().sort_values(ascending=False).head(10)
-    ventas_proveedor = filtro.groupby('proveedor')['cantidad'].sum().sort_values(ascending=False).head(10)
-    top_productos = filtro.groupby('producto')['cantidad'].sum().sort_values(ascending=False).head(5)
-    top_categorias = filtro.groupby('categoria')['cantidad'].sum()
+def mostrar_tabla_comparativa(tabla_comparativa):
+    st.markdown("### 📊 Comparativo de Ventas por Producto")
+    st.markdown("*Análisis similar a Power BI - 2024 vs 2025*")
     
-    return ventas_anio, ventas_mes, ventas_marca, ventas_proveedor, top_productos, top_categorias
-
-def graficos_principales(filtro):
-    ventas_anio, ventas_mes, ventas_marca, ventas_proveedor, top_productos, top_categorias = preparar_datos_graficos(filtro)
-    
-    # Gráfico comparativo por año
-    st.markdown("### 📊 Comparativo Anual")
-    
-    if len(ventas_anio) > 0:
-        fig1 = px.bar(
-            ventas_anio,
-            x='anio',
-            y='cantidad',
-            text_auto=True,
-            color='cantidad',
-            color_continuous_scale='Blues',
-            title="Ventas Totales por Año"
-        )
-        fig1.update_layout(
-            template='plotly_white',
-            height=350,
-            showlegend=False,
-            xaxis_title="Año",
-            yaxis_title="Unidades"
-        )
-        st.plotly_chart(fig1, use_container_width=True)
-    
-    # Gráfico por mes
-    st.markdown("### 📈 Tendencia Mensual")
-    
-    if len(ventas_mes) > 0:
-        ventas_mes = ventas_mes.sort_values('mes')
-        fig2 = px.line(
-            ventas_mes,
-            x='mes_nombre',
-            y='cantidad',
-            color='anio',
-            markers=True,
-            title="Comparativo Mensual",
-            color_discrete_sequence=['#3b82f6', '#10b981']
-        )
-        fig2.update_layout(
-            template='plotly_white',
-            height=350,
-            xaxis_title="Mes",
-            yaxis_title="Unidades"
-        )
-        fig2.update_traces(marker_size=6)
-        st.plotly_chart(fig2, use_container_width=True)
-    
-    # Dos columnas para gráficos
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### 🏷️ Top Marcas")
-        if len(ventas_marca) > 0:
-            fig3 = px.bar(
-                ventas_marca,
-                x=ventas_marca.values,
-                y=ventas_marca.index,
-                orientation='h',
-                text_auto=True,
-                color=ventas_marca.values,
-                color_continuous_scale='Blues',
-                title="Top 10 Marcas"
-            )
-            fig3.update_layout(template='plotly_white', height=350)
-            st.plotly_chart(fig3, use_container_width=True)
-    
+    # Selector de cantidad de filas
+    col1, col2 = st.columns([3, 1])
     with col2:
-        st.markdown("### 🏭 Top Proveedores")
-        if len(ventas_proveedor) > 0:
-            fig4 = px.bar(
-                ventas_proveedor,
-                x=ventas_proveedor.values,
-                y=ventas_proveedor.index,
-                orientation='h',
-                text_auto=True,
-                color=ventas_proveedor.values,
-                color_continuous_scale='Greens',
-                title="Top 10 Proveedores"
-            )
-            fig4.update_layout(template='plotly_white', height=350)
-            st.plotly_chart(fig4, use_container_width=True)
+        top_n = st.selectbox("Mostrar top", [20, 50, 100, "Todos"], index=0)
+    
+    # Filtrar tabla
+    if top_n != "Todos":
+        tabla_mostrar = tabla_comparativa.head(top_n)
+    else:
+        tabla_mostrar = tabla_comparativa
+    
+    # Formatear la tabla para mostrar
+    tabla_formateada = tabla_mostrar.copy()
+    tabla_formateada['ventas_2024'] = tabla_formateada['ventas_2024'].apply(lambda x: f"{int(x):,}")
+    tabla_formateada['ventas_2025'] = tabla_formateada['ventas_2025'].apply(lambda x: f"{int(x):,}")
+    tabla_formateada['diferencia'] = tabla_formateada['diferencia'].apply(lambda x: f"{int(x):,}")
+    tabla_formateada['variacion_porcentaje'] = tabla_formateada['variacion_porcentaje'].apply(
+        lambda x: f"{x:.1f}%"
+    )
+    
+    # Renombrar columnas para mejor visualización
+    tabla_formateada.columns = ['Producto', 'Ventas 2024', 'Ventas 2025', 'Diferencia', 'Variación %']
+    
+    # Estilizar la tabla con colores
+    def color_variacion(val):
+        if isinstance(val, str) and '%' in val:
+            try:
+                num = float(val.replace('%', ''))
+                if num < 0:
+                    return 'color: #dc2626; font-weight: bold'
+                elif num > 0:
+                    return 'color: #10b981; font-weight: bold'
+            except:
+                pass
+        return ''
+    
+    # Aplicar estilo
+    styled_df = tabla_formateada.style.applymap(color_variacion, subset=['Variación %'])
+    
+    # Mostrar tabla
+    st.dataframe(
+        styled_df,
+        use_container_width=True,
+        height=500,
+        hide_index=True
+    )
+    
+    # Mostrar resumen de la tabla
+    st.caption(f"📊 Total productos analizados: {len(tabla_comparativa) - 1} | "
+               f"Total ventas 2024: {int(tabla_comparativa[tabla_comparativa['producto'] != '**TOTAL**']['ventas_2024'].sum()):,} | "
+               f"Total ventas 2025: {int(tabla_comparativa[tabla_comparativa['producto'] != '**TOTAL**']['ventas_2025'].sum()):,}")
 
-def mostrar_top_productos(filtro):
-    _, _, _, _, top_productos, top_categorias = preparar_datos_graficos(filtro)
+# ======================================
+# GRÁFICO DE BARRAS COMPARATIVO
+# ======================================
+
+def mostrar_grafico_comparativo(tabla_comparativa):
+    st.markdown("### 📈 Top Productos con Mayor Caída")
     
-    col1, col2 = st.columns(2)
+    # Excluir total y tomar top 10 con mayor caída
+    top_caidas = tabla_comparativa[
+        (tabla_comparativa['producto'] != '**TOTAL**') & 
+        (tabla_comparativa['ventas_2024'] > 0)
+    ].head(10).copy()
     
-    with col1:
-        st.markdown("### 🏆 Top 5 Productos")
-        if len(top_productos) > 0:
-            fig = px.bar(
-                top_productos,
-                x=top_productos.values,
-                y=top_productos.index,
-                orientation='h',
-                text_auto=True,
-                color=top_productos.values,
-                color_continuous_scale='Blues'
-            )
-            fig.update_layout(template='plotly_white', height=350)
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.markdown("### 🎯 Por Categoría")
-        top_categorias = top_categorias[top_categorias.index != 'General']
-        if len(top_categorias) > 0:
-            fig = px.pie(
-                values=top_categorias.values,
-                names=top_categorias.index,
-                color_discrete_sequence=px.colors.sequential.Blues_r
-            )
-            fig.update_layout(template='plotly_white', height=350)
-            st.plotly_chart(fig, use_container_width=True)
+    if len(top_caidas) > 0:
+        fig = go.Figure()
+        
+        # Barras para 2024
+        fig.add_trace(go.Bar(
+            name='Ventas 2024',
+            x=top_caidas['producto'].str[:40] + '...',
+            y=top_caidas['ventas_2024'],
+            marker_color='#3b82f6',
+            text=top_caidas['ventas_2024'],
+            textposition='outside'
+        ))
+        
+        # Barras para 2025
+        fig.add_trace(go.Bar(
+            name='Ventas 2025',
+            x=top_caidas['producto'].str[:40] + '...',
+            y=top_caidas['ventas_2025'],
+            marker_color='#ef4444',
+            text=top_caidas['ventas_2025'],
+            textposition='outside'
+        ))
+        
+        fig.update_layout(
+            title="Comparativo de Ventas - Top 10 Productos",
+            template='plotly_white',
+            height=500,
+            barmode='group',
+            xaxis_title="Producto",
+            yaxis_title="Unidades Vendidas",
+            xaxis_tickangle=-45
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No hay datos suficientes para mostrar el gráfico comparativo")
 
 # ======================================
 # BOTONES DE EXPORTACIÓN
 # ======================================
 
-def botones_exportacion(filtro, kpis, filtros_aplicados):
+def botones_exportacion(df, tabla_comparativa, kpis, filtros_aplicados):
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("📊 Exportar Excel", use_container_width=True):
+        if st.button("📊 Exportar a Excel", use_container_width=True):
             with st.spinner("Generando Excel..."):
-                excel_data = exportar_excel(filtro)
+                excel_data = exportar_excel(df, tabla_comparativa)
                 b64 = base64.b64encode(excel_data.getvalue()).decode()
-                href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="reporte_ventas.xlsx">📥 Descargar</a>'
+                href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="reporte_comparativo.xlsx">📥 Descargar Excel</a>'
                 st.markdown(href, unsafe_allow_html=True)
-                st.success("✅ Listo!")
+                st.success("✅ Reporte generado!")
     
     with col2:
-        if st.button("📄 Exportar PDF", use_container_width=True):
+        if st.button("📄 Exportar a PDF", use_container_width=True):
             with st.spinner("Generando PDF..."):
-                pdf_data = exportar_pdf(filtro, kpis, filtros_aplicados)
+                pdf_data = exportar_pdf(tabla_comparativa, kpis, filtros_aplicados)
                 b64 = base64.b64encode(pdf_data).decode()
-                href = f'<a href="data:application/pdf;base64,{b64}" download="reporte_ventas.pdf">📥 Descargar</a>'
+                href = f'<a href="data:application/pdf;base64,{b64}" download="reporte_comparativo.pdf">📥 Descargar PDF</a>'
                 st.markdown(href, unsafe_allow_html=True)
-                st.success("✅ Listo!")
+                st.success("✅ Reporte generado!")
 
 # ======================================
 # MENÚ PRINCIPAL
@@ -796,7 +751,7 @@ def main():
         st.session_state.datos_cargados = False
         st.session_state.df = None
     
-    # Sidebar - Menú de carga
+    # Sidebar
     with st.sidebar:
         st.markdown("### 📁 Datos")
         
@@ -815,7 +770,7 @@ def main():
                             st.session_state.df = pd.concat([df1, df2], ignore_index=True)
                             st.session_state.df = limpiar_dataframe(st.session_state.df)
                             st.session_state.datos_cargados = True
-                            st.success("✅ Listo!")
+                            st.success("✅ Datos cargados!")
                         else:
                             st.error("Error al cargar")
                 else:
@@ -826,32 +781,56 @@ def main():
                 with st.spinner("Cargando ejemplo..."):
                     st.session_state.df = cargar_datos_ejemplo()
                     st.session_state.datos_cargados = True
-                    st.success("✅ Listo!")
+                    st.success("✅ Datos de ejemplo cargados!")
         
         st.markdown("---")
         
         if st.session_state.datos_cargados:
-            st.info(f"📊 {len(st.session_state.df):,} registros")
+            st.info(f"📊 {len(st.session_state.df):,} registros | {st.session_state.df['producto'].nunique()} productos")
     
     # Main content
     if not st.session_state.datos_cargados:
         st.markdown("""
-        <div style="text-align: center; padding: 2rem;">
-            <h1>📊 Dashboard de Ventas</h1>
-            <p style="color: #64748b;">Carga tus archivos Excel en el menú lateral</p>
+        <div style="text-align: center; padding: 3rem;">
+            <h1>📊 Dashboard Comparativo de Ventas</h1>
+            <p style="color: #64748b; font-size: 1.1rem;">
+                Análisis 2024 vs 2025 por producto - Estilo Power BI
+            </p>
+            <div style="margin-top: 2rem;">
+                <p style="color: #3b82f6;">Carga tus archivos Excel en el menú lateral</p>
+            </div>
         </div>
         """, unsafe_allow_html=True)
+        
+        with st.expander("📖 Instrucciones", expanded=False):
+            st.markdown("""
+            ### Cómo usar:
+            1. Carga los archivos Excel de ventas 2024 y 2025
+            2. El dashboard generará automáticamente la tabla comparativa
+            3. Puedes filtrar por marca o proveedor
+            4. Exporta los resultados a Excel o PDF
+            
+            ### Columnas necesarias:
+            - Fecha (fecha, date)
+            - Producto (producto, codigo, item)
+            - Cantidad (cantidad, venta)
+            - Marca (opcional)
+            - Proveedor (opcional)
+            """)
     else:
         # Aplicar filtros
         filtro, filtros_aplicados = aplicar_filtros(st.session_state.df)
         
         if len(filtro) == 0:
-            st.warning("⚠️ No hay datos con estos filtros")
+            st.warning("⚠️ No hay datos con los filtros seleccionados")
             return
         
+        # Crear tabla comparativa
+        tabla_comparativa = crear_tabla_comparativa(filtro, top_n=None)
+        
         # Título
-        st.markdown("# 📊 Dashboard de Ventas")
-        st.caption(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        st.markdown("# 📊 Dashboard Comparativo de Ventas")
+        st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Power BI Style")
         
         # Mostrar filtros activos
         with st.expander("🔍 Filtros activos", expanded=False):
@@ -864,47 +843,24 @@ def main():
         kpis = mostrar_kpis(filtro)
         
         # Exportar
-        botones_exportacion(filtro, kpis, filtros_aplicados)
+        botones_exportacion(filtro, tabla_comparativa, kpis, filtros_aplicados)
         
         st.markdown("---")
         
-        # Gráficos
-        graficos_principales(filtro)
+        # Tabla comparativa principal (similar a Power BI)
+        mostrar_tabla_comparativa(tabla_comparativa)
         
         st.markdown("---")
         
-        # Top productos
-        mostrar_top_productos(filtro)
+        # Gráfico comparativo
+        mostrar_grafico_comparativo(tabla_comparativa)
         
         st.markdown("---")
-        
-        # Tabla detallada (limitada para rendimiento)
-        st.markdown("### 📋 Detalle")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("📅 Días", filtro['fecha'].nunique())
-        with col2:
-            st.metric("📦 Productos", filtro['producto'].nunique())
-        with col3:
-            st.metric("⭐ Promedio", f"{filtro['cantidad'].mean():.0f}")
-        
-        # Mostrar solo las primeras 1000 filas para rendimiento
-        columnas_mostrar = ['fecha', 'producto', 'marca', 'proveedor', 'cantidad', 'anio', 'mes_nombre']
-        columnas_disponibles = [col for col in columnas_mostrar if col in filtro.columns]
-        
-        df_mostrar = filtro[columnas_disponibles].head(1000).copy()
-        
-        st.dataframe(
-            df_mostrar.sort_values('fecha', ascending=False),
-            use_container_width=True,
-            height=400
-        )
         
         # Footer
         st.markdown("""
         <div class="footer">
-            Dashboard de Ventas | Streamlit
+            Dashboard Comparativo de Ventas | Análisis 2024 vs 2025 | Desarrollado con Streamlit
         </div>
         """, unsafe_allow_html=True)
 
