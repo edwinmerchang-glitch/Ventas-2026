@@ -36,20 +36,54 @@ def init_session_state():
         st.session_state.df_2025 = None
 
 # ======================================
-# ESTILOS CORPORATIVOS PROFESIONALES
+# ESTILOS CORPORATIVOS PROFESIONALES - CORREGIDOS
 # ======================================
 
 st.markdown("""
 <style>
+    /* Fondo principal */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
     }
     
+    /* Sidebar */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
         border-right: 1px solid #e2e8f0;
     }
     
+    /* Texto en sidebar - IMPORTANTE para visibilidad */
+    section[data-testid="stSidebar"] .stMarkdown {
+        color: #e2e8f0 !important;
+    }
+    
+    section[data-testid="stSidebar"] label {
+        color: #ffffff !important;
+        font-weight: 500 !important;
+    }
+    
+    section[data-testid="stSidebar"] .stSelectbox label {
+        color: #ffffff !important;
+    }
+    
+    section[data-testid="stSidebar"] .stMultiSelect label {
+        color: #ffffff !important;
+    }
+    
+    /* Títulos en sidebar */
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3,
+    section[data-testid="stSidebar"] h4 {
+        color: #ffffff !important;
+    }
+    
+    /* Texto de selectores */
+    .stSelectbox div[data-baseweb="select"] span {
+        color: #1e293b !important;
+    }
+    
+    /* Main content */
     h1 {
         color: #1e293b;
         font-size: 2rem;
@@ -64,6 +98,7 @@ st.markdown("""
         font-weight: 600;
     }
     
+    /* KPI Cards */
     .kpi {
         background: white;
         border-radius: 12px;
@@ -72,6 +107,11 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
         transition: all 0.3s ease;
         border-top: 4px solid #3b82f6;
+    }
+    
+    .kpi:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     
     .kpi h3 {
@@ -106,6 +146,7 @@ st.markdown("""
         color: #991b1b;
     }
     
+    /* Botones */
     .stButton > button {
         background: #3b82f6;
         color: white;
@@ -123,6 +164,12 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
+    /* Expander */
+    .streamlit-expanderHeader {
+        color: #1e293b !important;
+    }
+    
+    /* Footer */
     .footer {
         text-align: center;
         padding: 1rem;
@@ -132,6 +179,7 @@ st.markdown("""
         font-size: 0.8rem;
     }
     
+    /* Responsive */
     @media (max-width: 768px) {
         .kpi .value {
             font-size: 1.2rem;
@@ -203,17 +251,17 @@ def crear_tabla_comparativa(df, columna_producto, top_n=None):
     
     # Verificar que la columna de producto existe
     if columna_producto not in df.columns:
-        st.error(f"La columna '{columna_producto}' no existe en los datos")
+        st.error(f"❌ La columna '{columna_producto}' no existe en los datos")
         return pd.DataFrame()
     
     # Verificar que existe la columna de cantidad
     if 'cantidad' not in df.columns:
-        st.error("La columna 'cantidad' no existe en los datos")
+        st.error("❌ La columna 'cantidad' no existe en los datos")
         return pd.DataFrame()
     
     # Verificar que existe la columna de año
     if 'anio' not in df.columns:
-        st.error("La columna 'anio' no existe en los datos")
+        st.error("❌ La columna 'anio' no existe en los datos")
         return pd.DataFrame()
     
     # Agrupar por producto y año
@@ -626,11 +674,11 @@ def main():
                         if success1 and success2 and df1 is not None and df2 is not None:
                             st.session_state.df_combinado = pd.concat([df1, df2], ignore_index=True)
                             st.session_state.datos_cargados = True
-                            st.success("✅ Datos cargados!")
+                            st.success("✅ Datos cargados correctamente!")
                         else:
-                            st.error("Error al cargar los archivos")
+                            st.error("❌ Error al cargar los archivos")
                 else:
-                    st.warning("Selecciona ambos archivos")
+                    st.warning("⚠️ Selecciona ambos archivos")
         
         with col2:
             if st.button("📊 Ejemplo", use_container_width=True):
@@ -690,18 +738,13 @@ def main():
             **Opcionales:**
             - Marca (marca, brand)
             - Proveedor (proveedor, supplier)
-            
-            ### Consejos:
-            1. Asegúrate de que la columna de producto tenga valores únicos por producto
-            2. Si tu columna de producto se llama diferente, podrás seleccionarla manualmente
-            3. Los datos se agruparán automáticamente por producto y año
             """)
     else:
         # Limpiar datos
         df = limpiar_dataframe(st.session_state.df_combinado)
         
         if df is None or len(df) == 0:
-            st.error("No hay datos válidos después de la limpieza")
+            st.error("❌ No hay datos válidos después de la limpieza")
             return
         
         # Selección de columna de producto
@@ -712,25 +755,22 @@ def main():
         columnas_excluir = ['fecha', 'cantidad', 'anio', 'mes', 'dia', 'mes_nombre', 'trimestre', 'semana']
         columnas_texto = [col for col in df.columns if col not in columnas_excluir]
         
-        # Buscar columna de producto por defecto
-        columna_producto_default = None
-        for col in columnas_texto:
-            if 'producto' in col.lower() or 'codigo' in col.lower() or 'item' in col.lower() or 'sku' in col.lower():
-                columna_producto_default = col
-                break
-        
-        if columna_producto_default is None and len(columnas_texto) > 0:
-            columna_producto_default = columnas_texto[0]
-        
-        if columna_producto_default is None:
-            st.error("No se encontró ninguna columna para identificar productos. Asegúrate de tener una columna con nombres de productos.")
+        if len(columnas_texto) == 0:
+            st.error("❌ No se encontró ninguna columna para identificar productos")
             return
         
+        # Mostrar selector con opciones
+        st.sidebar.markdown("**Selecciona la columna que identifica los productos:**")
         columna_producto = st.sidebar.selectbox(
-            "📦 Selecciona la columna que identifica los productos",
+            "Columnas disponibles:",
             options=columnas_texto,
-            index=columnas_texto.index(columna_producto_default) if columna_producto_default in columnas_texto else 0
+            index=0,
+            help="Elige la columna que contiene los nombres o códigos de los productos"
         )
+        
+        # Mostrar cuántos productos únicos hay
+        productos_unicos = df[columna_producto].nunique()
+        st.sidebar.info(f"📦 **{productos_unicos}** productos únicos encontrados")
         
         # Aplicar filtros
         filtro, filtros_aplicados = aplicar_filtros(df)
@@ -743,13 +783,14 @@ def main():
         tabla_comparativa = crear_tabla_comparativa(filtro, columna_producto, top_n=None)
         
         if tabla_comparativa is None or len(tabla_comparativa) == 0:
-            st.warning(f"No se pudieron generar datos. Verifica que la columna '{columna_producto}' tenga valores válidos")
+            st.warning(f"❌ No se pudieron generar datos. Verifica que la columna '{columna_producto}' tenga valores válidos")
             return
         
         # Título
         st.markdown("# 📊 Dashboard Comparativo de Ventas")
         st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        st.caption(f"📦 Analizando {len(tabla_comparativa)-1} productos individuales desde la columna: **{columna_producto}**")
+        st.caption(f"📦 Analizando **{len(tabla_comparativa)-1}** productos individuales")
+        st.caption(f"🏷️ Columna de producto seleccionada: **{columna_producto}**")
         
         # Mostrar filtros activos
         with st.expander("🔍 Filtros activos", expanded=False):
