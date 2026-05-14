@@ -113,11 +113,6 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    /* Estilo para tabla */
-    .dataframe {
-        font-size: 0.9rem;
-    }
-    
     /* Footer */
     .footer {
         text-align: center;
@@ -564,7 +559,7 @@ def mostrar_kpis(filtro):
     }
 
 # ======================================
-# TABLA COMPARATIVA ESTILO POWER BI
+# TABLA COMPARATIVA ESTILO POWER BI (CORREGIDA)
 # ======================================
 
 def mostrar_tabla_comparativa(tabla_comparativa):
@@ -586,20 +581,22 @@ def mostrar_tabla_comparativa(tabla_comparativa):
     else:
         tabla_mostrar = tabla_comparativa.copy()
     
-    # Formatear la tabla para mostrar
-    tabla_formateada = tabla_mostrar.copy()
-    tabla_formateada['ventas_2024'] = tabla_formateada['ventas_2024'].apply(lambda x: f"{int(x):,}")
-    tabla_formateada['ventas_2025'] = tabla_formateada['ventas_2025'].apply(lambda x: f"{int(x):,}")
-    tabla_formateada['diferencia'] = tabla_formateada['diferencia'].apply(lambda x: f"{int(x):,}")
-    tabla_formateada['variacion_porcentaje'] = tabla_formateada['variacion_porcentaje'].apply(
+    # Crear una copia para mostrar (sin modificar la original)
+    tabla_display = tabla_mostrar.copy()
+    
+    # Formatear valores numéricos
+    tabla_display['ventas_2024'] = tabla_display['ventas_2024'].apply(lambda x: f"{int(x):,}")
+    tabla_display['ventas_2025'] = tabla_display['ventas_2025'].apply(lambda x: f"{int(x):,}")
+    tabla_display['diferencia'] = tabla_display['diferencia'].apply(lambda x: f"{int(x):,}")
+    tabla_display['variacion_porcentaje'] = tabla_display['variacion_porcentaje'].apply(
         lambda x: f"{x:.1f}%"
     )
     
-    # Renombrar columnas para mejor visualización
-    tabla_formateada.columns = ['Producto', 'Ventas 2024', 'Ventas 2025', 'Diferencia', 'Variación %']
+    # Renombrar columnas
+    tabla_display.columns = ['Producto', 'Ventas 2024', 'Ventas 2025', 'Diferencia', 'Variación %']
     
-    # Aplicar formato condicional con colores usando map (nueva forma)
-    def color_variacion_series(val):
+    # Función para colorear las variaciones
+    def color_variacion(val):
         if isinstance(val, str) and '%' in val and val != '0.0%':
             try:
                 num = float(val.replace('%', ''))
@@ -611,16 +608,8 @@ def mostrar_tabla_comparativa(tabla_comparativa):
                 pass
         return ''
     
-    # Aplicar estilo usando map (método actualizado)
-    styled_df = tabla_formateada.style.map(color_variacion_series, subset=['Variación %'])
-    
-    # Configurar formato de números
-    styled_df = styled_df.format({
-        'Ventas 2024': lambda x: x,
-        'Ventas 2025': lambda x: x,
-        'Diferencia': lambda x: x,
-        'Variación %': lambda x: x
-    })
+    # Aplicar estilo
+    styled_df = tabla_display.style.map(color_variacion, subset=['Variación %'])
     
     # Mostrar tabla
     st.dataframe(
@@ -630,12 +619,16 @@ def mostrar_tabla_comparativa(tabla_comparativa):
         hide_index=True
     )
     
-    # Mostrar resumen
-    total_row_data = tabla_mostrar[tabla_mostrar['Producto'] == '**TOTAL**']
-    if len(total_row_data) > 0:
-        st.info(f"📊 **Resumen General:** Total ventas 2024: {total_row_data['Ventas 2024'].values[0]} | "
-               f"Total ventas 2025: {total_row_data['Ventas 2025'].values[0]} | "
-               f"Variación total: {total_row_data['Variación %'].values[0]}")
+    # Mostrar resumen general (usando la fila de total de la tabla original)
+    total_row = tabla_comparativa[tabla_comparativa['producto'] == '**TOTAL**']
+    if len(total_row) > 0:
+        total_2024 = int(total_row['ventas_2024'].iloc[0])
+        total_2025 = int(total_row['ventas_2025'].iloc[0])
+        total_var = total_row['variacion_porcentaje'].iloc[0]
+        
+        st.info(f"📊 **Resumen General:** Total ventas 2024: {total_2024:,} | "
+               f"Total ventas 2025: {total_2025:,} | "
+               f"Variación total: {total_var:.1f}%")
 
 # ======================================
 # GRÁFICO DE BARRAS COMPARATIVO
@@ -653,7 +646,7 @@ def mostrar_grafico_comparativo(tabla_comparativa):
     if len(top_productos) > 0:
         fig = go.Figure()
         
-        # Acortar nombres de productos para mejor visualización
+        # Acortar nombres de productos
         productos_short = top_productos['producto'].apply(lambda x: x[:40] + '...' if len(x) > 40 else x)
         
         # Barras para 2024
