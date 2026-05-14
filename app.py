@@ -26,18 +26,15 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Fondo corporativo limpio */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
     }
     
-    /* Sidebar corporativa */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
         border-right: 1px solid #e2e8f0;
     }
     
-    /* Títulos corporativos */
     h1 {
         color: #1e293b;
         font-size: 2rem;
@@ -52,7 +49,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* KPI Cards corporativas */
     .kpi {
         background: white;
         border-radius: 12px;
@@ -95,7 +91,6 @@ st.markdown("""
         color: #991b1b;
     }
     
-    /* Botones corporativos */
     .stButton > button {
         background: #3b82f6;
         color: white;
@@ -113,7 +108,6 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    /* Footer */
     .footer {
         text-align: center;
         padding: 1rem;
@@ -123,7 +117,6 @@ st.markdown("""
         font-size: 0.8rem;
     }
     
-    /* Responsive */
     @media (max-width: 768px) {
         .kpi .value {
             font-size: 1.2rem;
@@ -143,32 +136,21 @@ st.markdown("""
 def limpiar_dataframe(df):
     """Limpia el dataframe de valores erróneos"""
     
-    # Limpiar columna de año
     if 'anio' in df.columns:
         df['anio'] = pd.to_numeric(df['anio'], errors='coerce')
     
-    # Limpiar columna de cantidad
     if 'cantidad' in df.columns:
         df['cantidad'] = pd.to_numeric(df['cantidad'], errors='coerce').fillna(0)
     
-    # Eliminar filas con fechas inválidas
     if 'fecha' in df.columns:
         df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
         df = df.dropna(subset=['fecha'])
-        
-        # Recalcular año y mes
         df['anio'] = df['fecha'].dt.year
         df['mes'] = df['fecha'].dt.month
         df['mes_nombre'] = df['fecha'].dt.strftime('%B')
         df['dia'] = df['fecha'].dt.day
         df['trimestre'] = df['fecha'].dt.quarter
     
-    # Limpiar valores nulos
-    df['producto'] = df['producto'].fillna('No especificado').astype(str)
-    df['marca'] = df['marca'].fillna('No especificada').astype(str)
-    df['proveedor'] = df['proveedor'].fillna('No especificado').astype(str)
-    
-    # Eliminar filas donde el año sea inválido
     df = df.dropna(subset=['anio'])
     df = df[(df['anio'] >= 2000) & (df['anio'] <= 2030)]
     
@@ -179,149 +161,39 @@ def cargar_excel(file):
     """Carga archivo Excel y procesa los datos"""
     try:
         df = pd.read_excel(file)
-        
-        # Limpiar columnas
         df.columns = df.columns.str.strip().str.lower()
-        
-        # Identificar columnas necesarias
-        columnas = df.columns.tolist()
-        
-        # Buscar columna de fecha
-        fecha_col = None
-        for col in columnas:
-            if 'fecha' in col or 'date' in col:
-                fecha_col = col
-                break
-        
-        if fecha_col is None:
-            fecha_col = columnas[0]
-        
-        # Buscar columna de cantidad/ventas
-        cantidad_col = None
-        for col in columnas:
-            if 'cantidad' in col or 'venta' in col or 'monto' in col:
-                cantidad_col = col
-                break
-        
-        if cantidad_col is None:
-            cantidad_col = columnas[1] if len(columnas) > 1 else columnas[0]
-        
-        # Renombrar columnas
-        df.rename(columns={fecha_col: 'fecha', cantidad_col: 'cantidad'}, inplace=True)
-        
-        # Buscar o crear columna de producto
-        if 'producto' not in df.columns:
-            for col in columnas:
-                if 'producto' in col or 'item' in col or 'codigo' in col:
-                    df.rename(columns={col: 'producto'}, inplace=True)
-                    break
-            else:
-                df['producto'] = 'Producto General'
-        
-        # Buscar o crear columna de marca
-        if 'marca' not in df.columns:
-            for col in columnas:
-                if 'marca' in col or 'brand' in col:
-                    df.rename(columns={col: 'marca'}, inplace=True)
-                    break
-            else:
-                df['marca'] = 'General'
-        
-        # Buscar o crear columna de proveedor
-        if 'proveedor' not in df.columns:
-            for col in columnas:
-                if 'proveedor' in col or 'supplier' in col:
-                    df.rename(columns={col: 'proveedor'}, inplace=True)
-                    break
-            else:
-                df['proveedor'] = 'General'
-        
-        # Aplicar limpieza de datos
-        df = limpiar_dataframe(df)
-        
         return df, True
     except Exception as e:
         return None, False
-
-@st.cache_data(ttl=3600)
-def cargar_datos_ejemplo():
-    """Genera datos de ejemplo para demostración"""
-    np.random.seed(42)
-    
-    # Crear datos similares a la imagen
-    productos = [
-        "019962797569 - CREATINE HEALTHY S.MONOHYD.3000MG X300G",
-        "0300651481228 - SYSTANE COMPLETE GOTAS.OFT.0.6X10ML",
-        "0300653610794 - SOLUC.DESINFEC.OPTI-FREE P.LENTES X90ML",
-        "039800088635 - BATERIA ENERGIZER BOTON DE LITIO CR2032",
-        "054402330821 - BRONCE.AUST.GOLD SPR.GEL FPS30 X237ML",
-        "0700083725400 - COLAGENO BELFAN HIDROLIZADO VLLA.X600G",
-        "0715134328936 - PROBIOTICO JARROW EPS CAP.X30",
-        "0715134328974 - JARRO-DOPHILUS EPS CAP.X60",
-        "0715134329087 - B-FORMULA CAP.X100",
-        "0715134329148 - OMEGA 3 CARLSON LIQUIDO NORUEGO X500ML",
-        "1000025250700 - REP BAND BANDA ELAST.#2 NARANJAX1.5MT",
-        "1000025250717 - REP BAND BANDA FI AST.#3 VFRDFX1.5MT"
-    ]
-    
-    marcas = ["COLGATE", "GENOMMA LAB", "HALEON", "ENERGIZER", "BELFAN", "JARROW"]
-    proveedores = ["COLGATE PALMOLIVE CIA", "GENOMMA LAB COLOMBIA LTDA", "HALEON COLOMBIA S.A.S"]
-    
-    data = []
-    
-    # Generar datos para 2024
-    for producto in productos:
-        ventas_2024 = np.random.randint(1, 40)
-        for _ in range(ventas_2024):
-            fecha = pd.Timestamp(f"2024-{np.random.randint(1, 13)}-{np.random.randint(1, 28)}")
-            data.append({
-                'fecha': fecha,
-                'producto': producto,
-                'marca': np.random.choice(marcas),
-                'proveedor': np.random.choice(proveedores),
-                'cantidad': 1
-            })
-    
-    # Generar datos para 2025
-    for producto in productos:
-        ventas_2025 = np.random.randint(1, 10)
-        for _ in range(ventas_2025):
-            fecha = pd.Timestamp(f"2025-{np.random.randint(1, 13)}-{np.random.randint(1, 28)}")
-            data.append({
-                'fecha': fecha,
-                'producto': producto,
-                'marca': np.random.choice(marcas),
-                'proveedor': np.random.choice(proveedores),
-                'cantidad': 1
-            })
-    
-    df = pd.DataFrame(data)
-    df = limpiar_dataframe(df)
-    
-    return df
 
 # ======================================
 # FUNCIÓN PARA CREAR TABLA COMPARATIVA
 # ======================================
 
 @st.cache_data(ttl=300)
-def crear_tabla_comparativa(df, top_n=None):
-    """Crea tabla comparativa de productos similar a Power BI"""
+def crear_tabla_comparativa(df, columna_producto, top_n=None):
+    """Crea tabla comparativa de productos"""
+    
+    # Verificar que la columna de producto existe
+    if columna_producto not in df.columns:
+        st.error(f"La columna '{columna_producto}' no existe en los datos")
+        return pd.DataFrame()
     
     # Agrupar por producto y año
-    ventas_producto = df.groupby(['producto', 'anio'])['cantidad'].sum().reset_index()
+    ventas_producto = df.groupby([columna_producto, 'anio'])['cantidad'].sum().reset_index()
     
     # Pivotar para tener 2024 y 2025 como columnas
-    tabla_pivot = ventas_producto.pivot(index='producto', columns='anio', values='cantidad').fillna(0)
-    
-    # Renombrar columnas
-    tabla_pivot.columns = [f'ventas_{int(col)}' for col in tabla_pivot.columns]
+    tabla_pivot = ventas_producto.pivot(index=columna_producto, columns='anio', values='cantidad').fillna(0)
     
     # Asegurar que existen ambas columnas
-    if 'ventas_2024' not in tabla_pivot.columns:
-        tabla_pivot['ventas_2024'] = 0
-    if 'ventas_2025' not in tabla_pivot.columns:
-        tabla_pivot['ventas_2025'] = 0
+    if 2024 not in tabla_pivot.columns:
+        tabla_pivot[2024] = 0
+    if 2025 not in tabla_pivot.columns:
+        tabla_pivot[2025] = 0
+    
+    # Renombrar columnas
+    tabla_pivot.columns = ['ventas_2024', 'ventas_2025'] if len(tabla_pivot.columns) == 2 else \
+                          [f'ventas_{int(col)}' for col in tabla_pivot.columns]
     
     # Calcular diferencia y variación
     tabla_pivot['diferencia'] = tabla_pivot['ventas_2025'] - tabla_pivot['ventas_2024']
@@ -331,37 +203,36 @@ def crear_tabla_comparativa(df, top_n=None):
         0
     )
     
-    # Reset index para tener producto como columna
+    # Reset index
     tabla_comparativa = tabla_pivot.reset_index()
-    
-    # Renombrar columnas para mejor presentación
-    tabla_comparativa.columns = ['producto', 'ventas_2024', 'ventas_2025', 'diferencia', 'variacion_porcentaje']
-    
-    # Ordenar por ventas 2024 (mayor a menor)
-    tabla_comparativa = tabla_comparativa.sort_values('ventas_2024', ascending=False)
+    tabla_comparativa = tabla_comparativa.rename(columns={columna_producto: 'producto'})
     
     # Filtrar productos con ventas > 0
     tabla_comparativa = tabla_comparativa[(tabla_comparativa['ventas_2024'] > 0) | (tabla_comparativa['ventas_2025'] > 0)]
     
-    # Limitar a top N si se especifica
+    # Ordenar por ventas 2024
+    tabla_comparativa = tabla_comparativa.sort_values('ventas_2024', ascending=False)
+    
+    # Limitar a top N
     if top_n and top_n != "Todos":
         tabla_comparativa = tabla_comparativa.head(top_n)
     
     # Agregar fila de total
-    total_ventas_2024 = tabla_comparativa['ventas_2024'].sum()
-    total_ventas_2025 = tabla_comparativa['ventas_2025'].sum()
-    total_diferencia = total_ventas_2025 - total_ventas_2024
-    total_variacion = ((total_ventas_2025 - total_ventas_2024) / total_ventas_2024 * 100) if total_ventas_2024 > 0 else 0
-    
-    total_row = pd.DataFrame({
-        'producto': ['**TOTAL**'],
-        'ventas_2024': [total_ventas_2024],
-        'ventas_2025': [total_ventas_2025],
-        'diferencia': [total_diferencia],
-        'variacion_porcentaje': [total_variacion]
-    })
-    
-    tabla_comparativa = pd.concat([tabla_comparativa, total_row], ignore_index=True)
+    if len(tabla_comparativa) > 0:
+        total_ventas_2024 = tabla_comparativa['ventas_2024'].sum()
+        total_ventas_2025 = tabla_comparativa['ventas_2025'].sum()
+        total_diferencia = total_ventas_2025 - total_ventas_2024
+        total_variacion = ((total_ventas_2025 - total_ventas_2024) / total_ventas_2024 * 100) if total_ventas_2024 > 0 else 0
+        
+        total_row = pd.DataFrame({
+            'producto': ['**TOTAL**'],
+            'ventas_2024': [total_ventas_2024],
+            'ventas_2025': [total_ventas_2025],
+            'diferencia': [total_diferencia],
+            'variacion_porcentaje': [total_variacion]
+        })
+        
+        tabla_comparativa = pd.concat([tabla_comparativa, total_row], ignore_index=True)
     
     return tabla_comparativa
 
@@ -369,16 +240,12 @@ def crear_tabla_comparativa(df, top_n=None):
 # FUNCIONES DE EXPORTACIÓN
 # ======================================
 
-def exportar_excel(df, tabla_comparativa):
+def exportar_excel(df, tabla_comparativa, columna_producto):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        # Hoja de detalle de ventas
         df.head(10000).to_excel(writer, sheet_name='Detalle_Ventas', index=False)
-        
-        # Hoja de tabla comparativa
         tabla_comparativa.to_excel(writer, sheet_name='Comparativo_Productos', index=False)
         
-        # Dar formato
         workbook = writer.book
         header_format = workbook.add_format({
             'bold': True,
@@ -399,18 +266,15 @@ def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
     pdf = FPDF()
     pdf.add_page()
     
-    # Configurar estilo
     pdf.set_fill_color(59, 130, 246)
     pdf.set_text_color(30, 41, 59)
     
-    # Título
     pdf.set_font("Arial", "B", 20)
     pdf.cell(0, 15, "Reporte Comparativo de Ventas por Producto", 0, 1, "C")
     pdf.set_font("Arial", "", 9)
     pdf.cell(0, 8, f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}", 0, 1, "C")
     pdf.ln(5)
     
-    # KPIs
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 8, "Indicadores Clave", 0, 1)
     pdf.set_font("Arial", "", 10)
@@ -420,7 +284,6 @@ def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
     
     pdf.ln(8)
     
-    # Tabla comparativa (top 20 para PDF)
     pdf.set_font("Arial", "B", 9)
     pdf.cell(80, 8, "Producto", 1, 0, 'C')
     pdf.cell(25, 8, "Ventas 2024", 1, 0, 'C')
@@ -435,16 +298,12 @@ def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
         pdf.cell(25, 7, f"{int(row['ventas_2024']):,}", 1, 0, 'R')
         pdf.cell(25, 7, f"{int(row['ventas_2025']):,}", 1, 0, 'R')
         pdf.cell(25, 7, f"{int(row['diferencia']):,}", 1, 0, 'R')
-        
-        # Color para variación
-        variacion = row['variacion_porcentaje']
-        variacion_str = f"{variacion:.1f}%"
-        pdf.cell(30, 7, variacion_str, 1, 1, 'R')
+        pdf.cell(30, 7, f"{row['variacion_porcentaje']:.1f}%", 1, 1, 'R')
     
     return pdf.output(dest='S').encode('latin1')
 
 # ======================================
-# FILTROS AVANZADOS
+# FILTROS
 # ======================================
 
 def aplicar_filtros(df):
@@ -462,23 +321,20 @@ def aplicar_filtros(df):
         key="anios"
     )
     
-    # Filtro de marca
-    marcas_disponibles = sorted([m for m in df['marca'].unique() if m not in ['No especificada', 'General']])
-    marcas_seleccionadas = st.sidebar.multiselect(
-        "🏷️ Marcas",
-        options=marcas_disponibles,
-        default=marcas_disponibles if marcas_disponibles else [],
-        key="marcas"
-    )
-    
-    # Filtro de proveedor
-    proveedores_disponibles = sorted([p for p in df['proveedor'].unique() if p not in ['No especificado', 'General']])
-    proveedores_seleccionados = st.sidebar.multiselect(
-        "🏭 Proveedores",
-        options=proveedores_disponibles,
-        default=proveedores_disponibles if proveedores_disponibles else [],
-        key="proveedores"
-    )
+    # Filtro de marca (si existe)
+    if 'marca' in df.columns:
+        marcas_disponibles = sorted([m for m in df['marca'].unique() if str(m) not in ['No especificada', 'General', 'nan']])
+        if marcas_disponibles:
+            marcas_seleccionadas = st.sidebar.multiselect(
+                "🏷️ Marcas",
+                options=marcas_disponibles,
+                default=marcas_disponibles if marcas_disponibles else [],
+                key="marcas"
+            )
+        else:
+            marcas_seleccionadas = []
+    else:
+        marcas_seleccionadas = []
     
     st.sidebar.markdown("---")
     
@@ -491,19 +347,13 @@ def aplicar_filtros(df):
     if marcas_seleccionadas:
         filtro = filtro[filtro['marca'].isin(marcas_seleccionadas)]
     
-    if proveedores_seleccionados:
-        filtro = filtro[filtro['proveedor'].isin(proveedores_seleccionados)]
-    
-    # Estadísticas
     with st.sidebar.expander("📈 Estadísticas", expanded=False):
         st.metric("Registros", f"{len(filtro):,}")
-        st.metric("Productos", filtro['producto'].nunique())
         st.metric("Ventas totales", f"{int(filtro['cantidad'].sum()):,}")
     
     filtros_dict = {
         'Años': ', '.join([str(a) for a in anio_seleccionado]) if anio_seleccionado else "Todos",
         'Marcas': ', '.join(marcas_seleccionadas[:3]) + ('...' if len(marcas_seleccionadas) > 3 else '') if marcas_seleccionadas else "Todas",
-        'Proveedores': ', '.join(proveedores_seleccionados[:3]) + ('...' if len(proveedores_seleccionados) > 3 else '') if proveedores_seleccionados else "Todos",
     }
     
     return filtro, filtros_dict
@@ -559,21 +409,24 @@ def mostrar_kpis(filtro):
     }
 
 # ======================================
-# TABLA COMPARATIVA ESTILO POWER BI (CORREGIDA)
+# TABLA COMPARATIVA
 # ======================================
 
 def mostrar_tabla_comparativa(tabla_comparativa):
     st.markdown("### 📊 Comparativo de Ventas por Producto")
-    st.markdown("*Análisis 2024 vs 2025 - Estilo Power BI*")
+    st.markdown("*Análisis 2024 vs 2025 - Desglose por producto individual*")
+    
+    if len(tabla_comparativa) == 0:
+        st.warning("No hay datos para mostrar")
+        return
     
     # Selector de cantidad de filas
     col1, col2 = st.columns([3, 1])
     with col2:
         top_n = st.selectbox("Mostrar top", [20, 50, 100, "Todos"], index=0)
     
-    # Filtrar tabla según selección
+    # Filtrar tabla
     if top_n != "Todos":
-        # Excluir total temporalmente para el filtro
         sin_total = tabla_comparativa[tabla_comparativa['producto'] != '**TOTAL**'].copy()
         sin_total_filtrado = sin_total.head(top_n)
         total_row = tabla_comparativa[tabla_comparativa['producto'] == '**TOTAL**'].copy()
@@ -581,10 +434,10 @@ def mostrar_tabla_comparativa(tabla_comparativa):
     else:
         tabla_mostrar = tabla_comparativa.copy()
     
-    # Crear una copia para mostrar (sin modificar la original)
+    # Crear copia para display
     tabla_display = tabla_mostrar.copy()
     
-    # Formatear valores numéricos
+    # Formatear valores
     tabla_display['ventas_2024'] = tabla_display['ventas_2024'].apply(lambda x: f"{int(x):,}")
     tabla_display['ventas_2025'] = tabla_display['ventas_2025'].apply(lambda x: f"{int(x):,}")
     tabla_display['diferencia'] = tabla_display['diferencia'].apply(lambda x: f"{int(x):,}")
@@ -595,7 +448,7 @@ def mostrar_tabla_comparativa(tabla_comparativa):
     # Renombrar columnas
     tabla_display.columns = ['Producto', 'Ventas 2024', 'Ventas 2025', 'Diferencia', 'Variación %']
     
-    # Función para colorear las variaciones
+    # Colorear variaciones
     def color_variacion(val):
         if isinstance(val, str) and '%' in val and val != '0.0%':
             try:
@@ -608,10 +461,8 @@ def mostrar_tabla_comparativa(tabla_comparativa):
                 pass
         return ''
     
-    # Aplicar estilo
     styled_df = tabla_display.style.map(color_variacion, subset=['Variación %'])
     
-    # Mostrar tabla
     st.dataframe(
         styled_df,
         use_container_width=True,
@@ -619,25 +470,25 @@ def mostrar_tabla_comparativa(tabla_comparativa):
         hide_index=True
     )
     
-    # Mostrar resumen general (usando la fila de total de la tabla original)
-    total_row = tabla_comparativa[tabla_comparativa['producto'] == '**TOTAL**']
-    if len(total_row) > 0:
-        total_2024 = int(total_row['ventas_2024'].iloc[0])
-        total_2025 = int(total_row['ventas_2025'].iloc[0])
-        total_var = total_row['variacion_porcentaje'].iloc[0]
+    # Resumen
+    total_row_data = tabla_comparativa[tabla_comparativa['producto'] == '**TOTAL**']
+    if len(total_row_data) > 0:
+        total_2024 = int(total_row_data['ventas_2024'].iloc[0])
+        total_2025 = int(total_row_data['ventas_2025'].iloc[0])
+        total_var = total_row_data['variacion_porcentaje'].iloc[0]
         
-        st.info(f"📊 **Resumen General:** Total ventas 2024: {total_2024:,} | "
-               f"Total ventas 2025: {total_2025:,} | "
-               f"Variación total: {total_var:.1f}%")
+        st.info(f"📊 **Resumen:** {len(tabla_comparativa)-1} productos | "
+               f"Total 2024: {total_2024:,} | "
+               f"Total 2025: {total_2025:,} | "
+               f"Variación: {total_var:.1f}%")
 
 # ======================================
-# GRÁFICO DE BARRAS COMPARATIVO
+# GRÁFICO
 # ======================================
 
 def mostrar_grafico_comparativo(tabla_comparativa):
-    st.markdown("### 📈 Top Productos con Mayor Volumen de Ventas")
+    st.markdown("### 📈 Top 10 Productos - Comparativo 2024 vs 2025")
     
-    # Excluir total y tomar top 10
     top_productos = tabla_comparativa[
         (tabla_comparativa['producto'] != '**TOTAL**') & 
         (tabla_comparativa['ventas_2024'] > 0)
@@ -646,10 +497,8 @@ def mostrar_grafico_comparativo(tabla_comparativa):
     if len(top_productos) > 0:
         fig = go.Figure()
         
-        # Acortar nombres de productos
         productos_short = top_productos['producto'].apply(lambda x: x[:40] + '...' if len(x) > 40 else x)
         
-        # Barras para 2024
         fig.add_trace(go.Bar(
             name='Ventas 2024',
             x=productos_short,
@@ -659,7 +508,6 @@ def mostrar_grafico_comparativo(tabla_comparativa):
             textposition='outside'
         ))
         
-        # Barras para 2025
         fig.add_trace(go.Bar(
             name='Ventas 2025',
             x=productos_short,
@@ -670,7 +518,7 @@ def mostrar_grafico_comparativo(tabla_comparativa):
         ))
         
         fig.update_layout(
-            title="Comparativo de Ventas - Top 10 Productos",
+            title="Top 10 Productos más vendidos",
             template='plotly_white',
             height=500,
             barmode='group',
@@ -681,19 +529,19 @@ def mostrar_grafico_comparativo(tabla_comparativa):
         
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No hay datos suficientes para mostrar el gráfico comparativo")
+        st.info("No hay datos suficientes")
 
 # ======================================
 # BOTONES DE EXPORTACIÓN
 # ======================================
 
-def botones_exportacion(df, tabla_comparativa, kpis, filtros_aplicados):
+def botones_exportacion(df, tabla_comparativa, kpis, filtros_aplicados, columna_producto):
     col1, col2 = st.columns(2)
     
     with col1:
         if st.button("📊 Exportar a Excel", use_container_width=True):
             with st.spinner("Generando Excel..."):
-                excel_data = exportar_excel(df, tabla_comparativa)
+                excel_data = exportar_excel(df, tabla_comparativa, columna_producto)
                 b64 = base64.b64encode(excel_data.getvalue()).decode()
                 href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="reporte_comparativo.xlsx">📥 Descargar Excel</a>'
                 st.markdown(href, unsafe_allow_html=True)
@@ -713,10 +561,11 @@ def botones_exportacion(df, tabla_comparativa, kpis, filtros_aplicados):
 # ======================================
 
 def main():
-    # Inicializar estado de sesión
+    # Inicializar estado
     if 'datos_cargados' not in st.session_state:
         st.session_state.datos_cargados = False
         st.session_state.df = None
+        st.session_state.df_combinado = None
     
     # Sidebar
     with st.sidebar:
@@ -734,8 +583,7 @@ def main():
                         df2, success2 = cargar_excel(archivo_2025)
                         
                         if success1 and success2:
-                            st.session_state.df = pd.concat([df1, df2], ignore_index=True)
-                            st.session_state.df = limpiar_dataframe(st.session_state.df)
+                            st.session_state.df_combinado = pd.concat([df1, df2], ignore_index=True)
                             st.session_state.datos_cargados = True
                             st.success("✅ Datos cargados!")
                         else:
@@ -746,22 +594,41 @@ def main():
         with col2:
             if st.button("📊 Ejemplo", use_container_width=True):
                 with st.spinner("Cargando ejemplo..."):
-                    st.session_state.df = cargar_datos_ejemplo()
+                    # Crear datos de ejemplo con múltiples productos
+                    np.random.seed(42)
+                    productos_ejemplo = [f"Producto_{i}" for i in range(1, 51)]
+                    fechas = pd.date_range('2024-01-01', '2025-12-31', freq='D')
+                    data = []
+                    for fecha in fechas:
+                        for _ in range(np.random.randint(5, 20)):
+                            data.append({
+                                'fecha': fecha,
+                                'producto': np.random.choice(productos_ejemplo),
+                                'cantidad': np.random.randint(1, 10)
+                            })
+                    df = pd.DataFrame(data)
+                    df = limpiar_dataframe(df)
+                    st.session_state.df_combinado = df
                     st.session_state.datos_cargados = True
                     st.success("✅ Datos de ejemplo cargados!")
         
         st.markdown("---")
         
-        if st.session_state.datos_cargados:
-            st.info(f"📊 {len(st.session_state.df):,} registros | {st.session_state.df['producto'].nunique()} productos")
+        if st.session_state.datos_cargados and st.session_state.df_combinado is not None:
+            st.info(f"📊 {len(st.session_state.df_combinado):,} registros")
+            
+            # Mostrar columnas disponibles
+            with st.expander("📋 Columnas disponibles"):
+                for col in st.session_state.df_combinado.columns:
+                    st.caption(f"• {col}")
     
     # Main content
-    if not st.session_state.datos_cargados:
+    if not st.session_state.datos_cargados or st.session_state.df_combinado is None:
         st.markdown("""
         <div style="text-align: center; padding: 3rem;">
             <h1>📊 Dashboard Comparativo de Ventas</h1>
             <p style="color: #64748b; font-size: 1.1rem;">
-                Análisis 2024 vs 2025 por producto - Estilo Power BI
+                Análisis 2024 vs 2025 por producto individual
             </p>
             <div style="margin-top: 2rem;">
                 <p style="color: #3b82f6;">Carga tus archivos Excel en el menú lateral</p>
@@ -771,33 +638,67 @@ def main():
         
         with st.expander("📖 Instrucciones", expanded=False):
             st.markdown("""
-            ### Cómo usar:
-            1. Carga los archivos Excel de ventas 2024 y 2025
-            2. El dashboard generará automáticamente la tabla comparativa
-            3. Puedes filtrar por marca o proveedor
-            4. Exporta los resultados a Excel o PDF
+            ### Columnas necesarias en tus archivos Excel:
             
-            ### Columnas necesarias:
-            - Fecha (fecha, date)
-            - Producto (producto, codigo, item)
-            - Cantidad (cantidad, venta)
-            - Marca (opcional)
-            - Proveedor (opcional)
+            **Obligatorias:**
+            - **Fecha** (fecha, date, Fecha) - Para identificar el año de la venta
+            - **Cantidad** (cantidad, venta, monto) - Número de unidades vendidas
+            - **Producto** (producto, codigo, item, SKU) - Para identificar cada producto individual
+            
+            **Opcionales:**
+            - Marca (marca, brand)
+            - Proveedor (proveedor, supplier)
+            
+            ### Consejos:
+            1. Asegúrate de que la columna de producto tenga valores únicos por producto
+            2. Si tu columna de producto se llama diferente, podrás seleccionarla manualmente
+            3. Los datos se agruparán automáticamente por producto y año
             """)
     else:
+        # Limpiar datos
+        df = limpiar_dataframe(st.session_state.df_combinado)
+        
+        # Selección de columna de producto
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 🏷️ Configuración")
+        
+        # Detectar posibles columnas de producto
+        columnas_texto = [col for col in df.columns if col not in ['fecha', 'cantidad', 'anio', 'mes', 'dia', 'mes_nombre', 'trimestre', 'semana']]
+        
+        # Buscar columna de producto por defecto
+        columna_producto_default = None
+        for col in columnas_texto:
+            if 'producto' in col or 'codigo' in col or 'item' in col or 'sku' in col:
+                columna_producto_default = col
+                break
+        
+        if columna_producto_default is None and len(columnas_texto) > 0:
+            columna_producto_default = columnas_texto[0]
+        
+        columna_producto = st.sidebar.selectbox(
+            "📦 Selecciona la columna que identifica los productos",
+            options=columnas_texto if columnas_texto else ['producto'],
+            index=columnas_texto.index(columna_producto_default) if columna_producto_default in columnas_texto else 0
+        )
+        
         # Aplicar filtros
-        filtro, filtros_aplicados = aplicar_filtros(st.session_state.df)
+        filtro, filtros_aplicados = aplicar_filtros(df)
         
         if len(filtro) == 0:
             st.warning("⚠️ No hay datos con los filtros seleccionados")
             return
         
-        # Crear tabla comparativa
-        tabla_comparativa = crear_tabla_comparativa(filtro, top_n=None)
+        # Crear tabla comparativa por producto
+        tabla_comparativa = crear_tabla_comparativa(filtro, columna_producto, top_n=None)
+        
+        if len(tabla_comparativa) == 0:
+            st.warning(f"No se pudieron generar datos. Verifica que la columna '{columna_producto}' tenga valores válidos")
+            return
         
         # Título
         st.markdown("# 📊 Dashboard Comparativo de Ventas")
         st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        st.caption(f"📦 Analizando {len(tabla_comparativa)-1} productos individuales desde la columna: **{columna_producto}**")
         
         # Mostrar filtros activos
         with st.expander("🔍 Filtros activos", expanded=False):
@@ -810,24 +711,28 @@ def main():
         kpis = mostrar_kpis(filtro)
         
         # Exportar
-        botones_exportacion(filtro, tabla_comparativa, kpis, filtros_aplicados)
+        botones_exportacion(filtro, tabla_comparativa, kpis, filtros_aplicados, columna_producto)
         
         st.markdown("---")
         
-        # Tabla comparativa principal
+        # Tabla comparativa
         mostrar_tabla_comparativa(tabla_comparativa)
         
         st.markdown("---")
         
-        # Gráfico comparativo
+        # Gráfico
         mostrar_grafico_comparativo(tabla_comparativa)
         
         st.markdown("---")
         
+        # Vista previa de datos
+        with st.expander("🔍 Vista previa de los datos cargados", expanded=False):
+            st.dataframe(filtro.head(100), use_container_width=True)
+        
         # Footer
         st.markdown("""
         <div class="footer">
-            Dashboard Comparativo de Ventas | Análisis 2024 vs 2025 | Desarrollado con Streamlit
+            Dashboard Comparativo de Ventas | Análisis 2024 vs 2025 por producto | Desarrollado con Streamlit
         </div>
         """, unsafe_allow_html=True)
 
