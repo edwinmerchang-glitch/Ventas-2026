@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 import os
 
-# ====================================
-# CONFIGURACIÓN
-# ====================================
+# =========================================
+# CONFIG STREAMLIT
+# =========================================
 
 st.set_page_config(
     page_title="Dashboard Ventas",
@@ -14,9 +14,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# ====================================
+# =========================================
 # ESTILO FUTURISTA
-# ====================================
+# =========================================
 
 st.markdown("""
 <style>
@@ -43,17 +43,27 @@ h1, h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
-# ====================================
+# =========================================
 # SQLITE
-# ====================================
+# =========================================
 
 engine = create_engine("sqlite:///ventas.db")
 
-# ====================================
-# CREAR BASE AUTOMÁTICAMENTE
-# ====================================
+# =========================================
+# VALIDAR TABLA
+# =========================================
 
-if not os.path.exists("ventas.db"):
+inspector = inspect(engine)
+
+tabla_existe = inspector.has_table("ventas")
+
+# =========================================
+# CREAR TABLA SI NO EXISTE
+# =========================================
+
+if not tabla_existe:
+
+    st.info("Creando base de datos...")
 
     archivo_2024 = "VENTA 2024.xlsx"
     archivo_2025 = "VENTA 2025.xlsx"
@@ -67,49 +77,83 @@ if not os.path.exists("ventas.db"):
     )
 
     # LIMPIAR COLUMNAS
-    df_total.columns = df_total.columns.str.strip()
+    df_total.columns = (
+        df_total.columns
+        .str.strip()
+        .str.lower()
+    )
 
-    # CAMBIAR NOMBRES SI ES NECESARIO
+    # =====================================
+    # AJUSTAR NOMBRES
+    # =====================================
+
     columnas = df_total.columns.tolist()
 
-    # AJUSTA ESTOS NOMBRES SI TU EXCEL ES DIFERENTE
+    # CAMBIA ESTO SI TU EXCEL TIENE OTROS NOMBRES
     if 'fecha' not in columnas:
-        df_total.rename(columns={columnas[0]: 'fecha'}, inplace=True)
+        df_total.rename(
+            columns={columnas[0]: 'fecha'},
+            inplace=True
+        )
 
     if 'cantidad' not in columnas:
-        df_total.rename(columns={columnas[1]: 'cantidad'}, inplace=True)
+        df_total.rename(
+            columns={columnas[1]: 'cantidad'},
+            inplace=True
+        )
 
+    # =====================================
     # FECHAS
-    df_total['fecha'] = pd.to_datetime(df_total['fecha'])
+    # =====================================
+
+    df_total['fecha'] = pd.to_datetime(
+        df_total['fecha'],
+        errors='coerce'
+    )
+
+    df_total = df_total.dropna(subset=['fecha'])
+
+    # =====================================
+    # NUMERICOS
+    # =====================================
+
+    df_total['cantidad'] = pd.to_numeric(
+        df_total['cantidad'],
+        errors='coerce'
+    ).fillna(0)
+
+    # =====================================
+    # CAMPOS EXTRA
+    # =====================================
 
     df_total['anio'] = df_total['fecha'].dt.year
     df_total['mes'] = df_total['fecha'].dt.month
     df_total['dia'] = df_total['fecha'].dt.day
     df_total['fecha_dia'] = df_total['fecha'].dt.date
 
+    # =====================================
     # SQLITE
+    # =====================================
+
     df_total.to_sql(
-        'ventas',
+        "ventas",
         engine,
-        if_exists='replace',
+        if_exists="replace",
         index=False
     )
 
-# ====================================
-# LEER SQLITE
-# ====================================
+# =========================================
+# LEER DATOS
+# =========================================
 
-df = pd.read_sql("SELECT * FROM ventas", engine)
+df = pd.read_sql(
+    "SELECT * FROM ventas",
+    engine
+)
 
-# ====================================
-# FECHAS
-# ====================================
-
-df['fecha'] = pd.to_datetime(df['fecha'])
-
-# ====================================
-# SIDEBAR
-# ====================================
+# =========================================
+# FILTROS
+# =========================================
 
 st.sidebar.title("⚡ Filtros")
 
@@ -121,22 +165,18 @@ anio = st.sidebar.multiselect(
     default=anios
 )
 
-# ====================================
-# FILTRO
-# ====================================
-
 filtro = df[df['anio'].isin(anio)]
 
-# ====================================
+# =========================================
 # TITULO
-# ====================================
+# =========================================
 
 st.title("🚀 Dashboard Futurista de Ventas")
 st.caption("Comparativo de unidades vendidas")
 
-# ====================================
-# KPIs
-# ====================================
+# =========================================
+# KPIS
+# =========================================
 
 ventas_totales = int(filtro['cantidad'].sum())
 
@@ -152,9 +192,9 @@ col2.metric(
     len(filtro)
 )
 
-# ====================================
-# AÑO
-# ====================================
+# =========================================
+# GRAFICO AÑO
+# =========================================
 
 st.subheader("📈 Ventas por Año")
 
@@ -174,9 +214,9 @@ fig_anio = px.bar(
 
 st.plotly_chart(fig_anio, use_container_width=True)
 
-# ====================================
-# MES
-# ====================================
+# =========================================
+# GRAFICO MES
+# =========================================
 
 st.subheader("📅 Ventas por Mes")
 
@@ -197,9 +237,9 @@ fig_mes = px.line(
 
 st.plotly_chart(fig_mes, use_container_width=True)
 
-# ====================================
-# DÍA
-# ====================================
+# =========================================
+# GRAFICO DIA
+# =========================================
 
 st.subheader("📊 Ventas Diarias")
 
@@ -218,9 +258,9 @@ fig_dia = px.area(
 
 st.plotly_chart(fig_dia, use_container_width=True)
 
-# ====================================
+# =========================================
 # TABLA
-# ====================================
+# =========================================
 
 st.subheader("📋 Detalle")
 
