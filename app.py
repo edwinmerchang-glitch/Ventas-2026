@@ -440,10 +440,6 @@ def aplicar_filtros(df):
         help="Filtrar por marca específica"
     )
     
-    # Opción "Todas las marcas"
-    if "Todas" not in marcas_seleccionadas and len(marcas_seleccionadas) == 0:
-        marcas_seleccionadas = marcas
-    
     st.sidebar.markdown("---")
     
     # ===== SECCIÓN PROVEEDORES =====
@@ -714,31 +710,6 @@ def graficos_principales(filtro):
     )
     st.plotly_chart(fig4, use_container_width=True)
 
-def crear_heatmap(filtro):
-    st.markdown("### 🌡️ Heatmap de Ventas")
-    
-    heatmap_data = filtro.groupby(['mes', 'dia'])['cantidad'].sum().reset_index()
-    pivot_heatmap = heatmap_data.pivot(index='dia', columns='mes', values='cantidad').fillna(0)
-    
-    fig = px.imshow(
-        pivot_heatmap,
-        labels=dict(x="Mes", y="Día", color="Ventas"),
-        x=pivot_heatmap.columns,
-        y=pivot_heatmap.index,
-        color_continuous_scale="Blues",
-        aspect="auto",
-        title="Mapa de Calor: Ventas por Día y Mes"
-    )
-    
-    fig.update_layout(
-        template='plotly_white',
-        height=500,
-        xaxis_title="Mes",
-        yaxis_title="Día del Mes"
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
 def mostrar_top_productos(filtro):
     col1, col2 = st.columns(2)
     
@@ -924,12 +895,6 @@ def main():
         
         # Gráficos principales
         graficos_principales(filtro)
-        
-        st.markdown("---")
-        
-        # Heatmap
-        if len(filtro) > 0:
-            crear_heatmap(filtro)
         
         st.markdown("---")
         
