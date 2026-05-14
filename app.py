@@ -63,4 +63,8 @@ section[data-testid="stSidebar"] {
 }
 
 h1, h2, h3 {
-)
+    color: white;
+}
+
+</style>
+""", unsafe_allow_html=True)
