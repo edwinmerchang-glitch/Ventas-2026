@@ -36,23 +36,20 @@ def init_session_state():
         st.session_state.df_2025 = None
 
 # ======================================
-# ESTILOS CORPORATIVOS PROFESIONALES - CORREGIDOS
+# ESTILOS CORPORATIVOS PROFESIONALES
 # ======================================
 
 st.markdown("""
 <style>
-    /* Fondo principal */
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
     }
     
-    /* Sidebar */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
         border-right: 1px solid #e2e8f0;
     }
     
-    /* Texto en sidebar - IMPORTANTE para visibilidad */
     section[data-testid="stSidebar"] .stMarkdown {
         color: #e2e8f0 !important;
     }
@@ -62,15 +59,6 @@ st.markdown("""
         font-weight: 500 !important;
     }
     
-    section[data-testid="stSidebar"] .stSelectbox label {
-        color: #ffffff !important;
-    }
-    
-    section[data-testid="stSidebar"] .stMultiSelect label {
-        color: #ffffff !important;
-    }
-    
-    /* Títulos en sidebar */
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3,
@@ -78,12 +66,6 @@ st.markdown("""
         color: #ffffff !important;
     }
     
-    /* Texto de selectores */
-    .stSelectbox div[data-baseweb="select"] span {
-        color: #1e293b !important;
-    }
-    
-    /* Main content */
     h1 {
         color: #1e293b;
         font-size: 2rem;
@@ -98,7 +80,6 @@ st.markdown("""
         font-weight: 600;
     }
     
-    /* KPI Cards */
     .kpi {
         background: white;
         border-radius: 12px;
@@ -107,11 +88,6 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
         transition: all 0.3s ease;
         border-top: 4px solid #3b82f6;
-    }
-    
-    .kpi:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
     
     .kpi h3 {
@@ -146,7 +122,6 @@ st.markdown("""
         color: #991b1b;
     }
     
-    /* Botones */
     .stButton > button {
         background: #3b82f6;
         color: white;
@@ -164,12 +139,6 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    /* Expander */
-    .streamlit-expanderHeader {
-        color: #1e293b !important;
-    }
-    
-    /* Footer */
     .footer {
         text-align: center;
         padding: 1rem;
@@ -179,7 +148,6 @@ st.markdown("""
         font-size: 0.8rem;
     }
     
-    /* Responsive */
     @media (max-width: 768px) {
         .kpi .value {
             font-size: 1.2rem;
@@ -197,19 +165,18 @@ st.markdown("""
 
 @st.cache_data(ttl=3600)
 def limpiar_dataframe(df):
-    """Limpia el dataframe de valores erróneos"""
+    """Limpia el dataframe de valores erróneos y asegura que exista la columna año"""
     if df is None or len(df) == 0:
         return df
-    
-    # Limpiar columna de año
-    if 'anio' in df.columns:
-        df['anio'] = pd.to_numeric(df['anio'], errors='coerce')
     
     # Limpiar columna de cantidad
     if 'cantidad' in df.columns:
         df['cantidad'] = pd.to_numeric(df['cantidad'], errors='coerce').fillna(0)
+    else:
+        # Si no hay columna cantidad, crear una por defecto
+        df['cantidad'] = 1
     
-    # Procesar fechas
+    # Procesar fechas y crear columna año
     if 'fecha' in df.columns:
         df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
         df = df.dropna(subset=['fecha'])
@@ -218,11 +185,31 @@ def limpiar_dataframe(df):
         df['mes_nombre'] = df['fecha'].dt.strftime('%B')
         df['dia'] = df['fecha'].dt.day
         df['trimestre'] = df['fecha'].dt.quarter
+    else:
+        # Buscar cualquier columna que pueda contener fechas
+        for col in df.columns:
+            try:
+                df['fecha'] = pd.to_datetime(df[col], errors='coerce')
+                if df['fecha'].notna().sum() > 0:
+                    df['anio'] = df['fecha'].dt.year
+                    df['mes'] = df['fecha'].dt.month
+                    df['mes_nombre'] = df['fecha'].dt.strftime('%B')
+                    break
+            except:
+                continue
+    
+    # Si aún no hay año, intentar extraer de otra columna
+    if 'anio' not in df.columns:
+        for col in df.columns:
+            if 'año' in col.lower() or 'year' in col.lower() or 'anio' in col.lower():
+                df['anio'] = pd.to_numeric(df[col], errors='coerce')
+                break
     
     # Eliminar filas con año inválido
     if 'anio' in df.columns:
         df = df.dropna(subset=['anio'])
         df = df[(df['anio'] >= 2000) & (df['anio'] <= 2030)]
+        df['anio'] = df['anio'].astype(int)
     
     return df
 
@@ -263,6 +250,10 @@ def crear_tabla_comparativa(df, columna_producto, top_n=None):
     if 'anio' not in df.columns:
         st.error("❌ La columna 'anio' no existe en los datos")
         return pd.DataFrame()
+    
+    # Mostrar años disponibles para depuración
+    años_disponibles = sorted(df['anio'].unique())
+    st.sidebar.caption(f"📅 Años encontrados: {', '.join(map(str, años_disponibles))}")
     
     # Agrupar por producto y año
     ventas_producto = df.groupby([columna_producto, 'anio'])['cantidad'].sum().reset_index()
@@ -387,18 +378,28 @@ def aplicar_filtros(df):
     if df is None or len(df) == 0:
         return df, {}
     
-    # Filtro de año
-    if 'anio' in df.columns:
+    # Mostrar información de diagnóstico
+    st.sidebar.caption("🔍 Diagnóstico:")
+    st.sidebar.caption(f"Registros totales: {len(df):,}")
+    
+    # Filtro de año - CORREGIDO
+    if 'anio' in df.columns and len(df) > 0:
         anios = sorted(df['anio'].dropna().unique())
-        anios = [a for a in anios if isinstance(a, (int, float)) and a >= 2000]
+        anios = [int(a) for a in anios if pd.notna(a)]
         
-        anio_seleccionado = st.sidebar.multiselect(
-            "📅 Años",
-            options=anios,
-            default=anios if anios else [],
-            key="anios"
-        )
+        if len(anios) > 0:
+            st.sidebar.caption(f"Años encontrados: {anios}")
+            anio_seleccionado = st.sidebar.multiselect(
+                "📅 Años",
+                options=anios,
+                default=anios,
+                key="anios_filtro"
+            )
+        else:
+            st.sidebar.warning("No se encontraron años válidos en los datos")
+            anio_seleccionado = []
     else:
+        st.sidebar.error("❌ No se encontró la columna 'anio'")
         anio_seleccionado = []
     
     # Filtro de marca (si existe)
@@ -408,8 +409,8 @@ def aplicar_filtros(df):
             marcas_seleccionadas = st.sidebar.multiselect(
                 "🏷️ Marcas",
                 options=marcas_disponibles,
-                default=marcas_disponibles if marcas_disponibles else [],
-                key="marcas"
+                default=marcas_disponibles,
+                key="marcas_filtro"
             )
         else:
             marcas_seleccionadas = []
@@ -423,14 +424,18 @@ def aplicar_filtros(df):
     
     if anio_seleccionado:
         filtro = filtro[filtro['anio'].isin(anio_seleccionado)]
+        st.sidebar.caption(f"Después de filtro años: {len(filtro):,}")
     
     if marcas_seleccionadas:
         filtro = filtro[filtro['marca'].isin(marcas_seleccionadas)]
     
     with st.sidebar.expander("📈 Estadísticas", expanded=False):
-        st.metric("Registros", f"{len(filtro):,}")
+        st.metric("Registros filtrados", f"{len(filtro):,}")
         if 'cantidad' in filtro.columns:
             st.metric("Ventas totales", f"{int(filtro['cantidad'].sum()):,}")
+        if 'anio' in filtro.columns:
+            años_filtro = sorted(filtro['anio'].unique())
+            st.metric("Años en filtro", ', '.join(map(str, años_filtro)))
     
     filtros_dict = {
         'Años': ', '.join([str(a) for a in anio_seleccionado]) if anio_seleccionado else "Todos",
@@ -448,8 +453,13 @@ def mostrar_kpis(filtro):
         return {'total': 0, 'v2024': 0, 'v2025': 0, 'crecimiento': 0}
     
     ventas_total = int(filtro['cantidad'].sum()) if 'cantidad' in filtro.columns else 0
-    ventas_2024 = int(filtro[(filtro['anio'] == 2024)]['cantidad'].sum()) if 'anio' in filtro.columns and 2024 in filtro['anio'].values else 0
-    ventas_2025 = int(filtro[(filtro['anio'] == 2025)]['cantidad'].sum()) if 'anio' in filtro.columns and 2025 in filtro['anio'].values else 0
+    
+    ventas_2024 = 0
+    ventas_2025 = 0
+    
+    if 'anio' in filtro.columns:
+        ventas_2024 = int(filtro[filtro['anio'] == 2024]['cantidad'].sum()) if 2024 in filtro['anio'].values else 0
+        ventas_2025 = int(filtro[filtro['anio'] == 2025]['cantidad'].sum()) if 2025 in filtro['anio'].values else 0
     
     if ventas_2024 > 0:
         crecimiento = ((ventas_2025 - ventas_2024) / ventas_2024) * 100
@@ -683,7 +693,6 @@ def main():
         with col2:
             if st.button("📊 Ejemplo", use_container_width=True):
                 with st.spinner("Cargando ejemplo..."):
-                    # Crear datos de ejemplo con múltiples productos
                     np.random.seed(42)
                     productos_ejemplo = [f"Producto_{i}" for i in range(1, 51)]
                     fechas = pd.date_range('2024-01-01', '2025-12-31', freq='D')
@@ -707,7 +716,6 @@ def main():
         if st.session_state.datos_cargados and st.session_state.df_combinado is not None:
             st.info(f"📊 {len(st.session_state.df_combinado):,} registros")
             
-            # Mostrar columnas disponibles
             with st.expander("📋 Columnas disponibles"):
                 for col in st.session_state.df_combinado.columns:
                     st.caption(f"• {col}")
@@ -747,11 +755,19 @@ def main():
             st.error("❌ No hay datos válidos después de la limpieza")
             return
         
+        # Mostrar diagnóstico
+        with st.sidebar.expander("🔍 Diagnóstico de datos", expanded=True):
+            st.caption(f"Total registros: {len(df):,}")
+            if 'anio' in df.columns:
+                años = sorted(df['anio'].unique())
+                st.caption(f"Años encontrados: {', '.join(map(str, años))}")
+            if 'fecha' in df.columns:
+                st.caption(f"Rango fechas: {df['fecha'].min().date()} a {df['fecha'].max().date()}")
+        
         # Selección de columna de producto
         st.sidebar.markdown("---")
         st.sidebar.markdown("### 🏷️ Configuración")
         
-        # Detectar posibles columnas de producto
         columnas_excluir = ['fecha', 'cantidad', 'anio', 'mes', 'dia', 'mes_nombre', 'trimestre', 'semana']
         columnas_texto = [col for col in df.columns if col not in columnas_excluir]
         
@@ -759,7 +775,6 @@ def main():
             st.error("❌ No se encontró ninguna columna para identificar productos")
             return
         
-        # Mostrar selector con opciones
         st.sidebar.markdown("**Selecciona la columna que identifica los productos:**")
         columna_producto = st.sidebar.selectbox(
             "Columnas disponibles:",
@@ -768,9 +783,8 @@ def main():
             help="Elige la columna que contiene los nombres o códigos de los productos"
         )
         
-        # Mostrar cuántos productos únicos hay
         productos_unicos = df[columna_producto].nunique()
-        st.sidebar.info(f"📦 **{productos_unicos}** productos únicos encontrados")
+        st.sidebar.success(f"📦 **{productos_unicos}** productos únicos encontrados")
         
         # Aplicar filtros
         filtro, filtros_aplicados = aplicar_filtros(df)
@@ -791,6 +805,10 @@ def main():
         st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         st.caption(f"📦 Analizando **{len(tabla_comparativa)-1}** productos individuales")
         st.caption(f"🏷️ Columna de producto seleccionada: **{columna_producto}**")
+        
+        if 'anio' in filtro.columns:
+            años_filtro = sorted(filtro['anio'].unique())
+            st.caption(f"📅 Años en análisis: **{', '.join(map(str, años_filtro))}**")
         
         # Mostrar filtros activos
         with st.expander("🔍 Filtros activos", expanded=False):
