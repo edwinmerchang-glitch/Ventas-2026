@@ -132,8 +132,17 @@ st.markdown("""
     
     /* Selectores corporativos */
     .stSelectbox label, .stMultiSelect label {
-        color: #334155;
+        color: #ffffff !important;
         font-weight: 500;
+    }
+    
+    /* Sidebar text color */
+    section[data-testid="stSidebar"] .stMarkdown {
+        color: #e2e8f0;
+    }
+    
+    section[data-testid="stSidebar"] h3 {
+        color: #ffffff !important;
     }
     
     /* Cards de métricas */
@@ -157,6 +166,11 @@ st.markdown("""
     /* Mensajes de éxito/error */
     .stAlert {
         border-radius: 8px;
+    }
+    
+    /* Filtros en sidebar */
+    .filter-section {
+        margin-bottom: 1rem;
     }
     
     /* Responsive */
@@ -226,7 +240,6 @@ def cargar_excel(file):
         
         # Buscar o crear columna de producto
         if 'producto' not in df.columns:
-            # Intentar encontrar columna de producto
             for col in columnas:
                 if 'producto' in col or 'item' in col or 'articulo' in col:
                     df.rename(columns={col: 'producto'}, inplace=True)
@@ -234,10 +247,28 @@ def cargar_excel(file):
             else:
                 df['producto'] = 'Producto General'
         
-        # Buscar o crear columna de categoría
+        # Buscar o crear columna de categoría/marca
+        if 'marca' not in df.columns:
+            for col in columnas:
+                if 'marca' in col or 'brand' in col:
+                    df.rename(columns={col: 'marca'}, inplace=True)
+                    break
+            else:
+                df['marca'] = 'General'
+        
+        # Buscar o crear columna de proveedor
+        if 'proveedor' not in df.columns:
+            for col in columnas:
+                if 'proveedor' in col or 'supplier' in col:
+                    df.rename(columns={col: 'proveedor'}, inplace=True)
+                    break
+            else:
+                df['proveedor'] = 'General'
+        
+        # Buscar columna de categoría si existe
         if 'categoria' not in df.columns:
             for col in columnas:
-                if 'categoria' in col or 'departamento' in col:
+                if 'categoria' in col or 'category' in col:
                     df.rename(columns={col: 'categoria'}, inplace=True)
                     break
             else:
@@ -248,11 +279,13 @@ def cargar_excel(file):
         return None, False, f"❌ Error al cargar archivo: {str(e)}"
 
 def cargar_datos_ejemplo():
-    """Genera datos de ejemplo para demostración"""
+    """Genera datos de ejemplo para demostración con marcas y proveedores"""
     np.random.seed(42)
     
     fechas = pd.date_range('2024-01-01', '2025-12-31', freq='D')
     productos = ['Producto A', 'Producto B', 'Producto C', 'Producto D', 'Producto E']
+    marcas = ['HAIKO NATURAL S.A.S.', 'Marca B', 'Marca C', 'Marca D']
+    proveedores = ['HAIKO NATURAL S.A.S.', 'Proveedor X', 'Proveedor Y', 'Proveedor Z']
     categorias = ['Electrónica', 'Ropa', 'Hogar', 'Deportes', 'Juguetes']
     
     data = []
@@ -261,6 +294,8 @@ def cargar_datos_ejemplo():
             data.append({
                 'fecha': fecha,
                 'producto': np.random.choice(productos),
+                'marca': np.random.choice(marcas),
+                'proveedor': np.random.choice(proveedores),
                 'categoria': np.random.choice(categorias),
                 'cantidad': np.random.randint(1, 100)
             })
@@ -304,7 +339,7 @@ def exportar_excel(df):
     output.seek(0)
     return output
 
-def exportar_pdf(df, kpis):
+def exportar_pdf(df, kpis, filtros_aplicados):
     pdf = FPDF()
     pdf.add_page()
     
@@ -317,6 +352,15 @@ def exportar_pdf(df, kpis):
     pdf.cell(0, 20, "Reporte Ejecutivo de Ventas", 0, 1, "C")
     pdf.set_font("Arial", "", 10)
     pdf.cell(0, 10, f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}", 0, 1, "C")
+    pdf.ln(5)
+    
+    # Filtros aplicados
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Filtros Aplicados:", 0, 1)
+    pdf.set_font("Arial", "", 10)
+    for key, value in filtros_aplicados.items():
+        pdf.cell(0, 6, f"{key}: {value}", 0, 1)
+    
     pdf.ln(10)
     
     # KPIs
@@ -328,44 +372,105 @@ def exportar_pdf(df, kpis):
     pdf.cell(0, 8, f"Ventas 2025: {kpis['v2025']:,} unidades", 0, 1)
     pdf.cell(0, 8, f"Crecimiento: {kpis['crecimiento']:.1f}%", 0, 1)
     
-    pdf.ln(10)
-    
-    # Resumen por año
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Resumen por Año y Mes:", 0, 1)
-    
     return pdf.output(dest='S').encode('latin1')
 
 # ======================================
-# FILTROS
+# FILTROS AVANZADOS
 # ======================================
 
 def aplicar_filtros(df):
     st.sidebar.markdown("### 📊 Panel de Control")
     st.sidebar.markdown("---")
     
+    # ===== SECCIÓN FECHAS =====
+    st.sidebar.markdown("#### 📅 Filtros de Fecha")
+    
+    # Rango de fechas
+    fecha_min = df['fecha'].min().date()
+    fecha_max = df['fecha'].max().date()
+    
+    # Selector de rango de fechas
+    rango_fechas = st.sidebar.date_input(
+        "📆 Rango de Fechas",
+        [fecha_min, fecha_max],
+        min_value=fecha_min,
+        max_value=fecha_max,
+        key="rango_fechas"
+    )
+    
     # Filtro de año
     anios = sorted(df['anio'].unique())
     anio_seleccionado = st.sidebar.multiselect(
         "📅 Años",
         anios,
-        default=anios
+        default=anios,
+        key="anios"
     )
     
     # Filtro de mes
     meses = sorted(df['mes'].unique())
-    mes_seleccionado = st.sidebar.multiselect(
+    nombres_meses = {
+        1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
+        5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
+        9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+    }
+    meses_nombres = [f"{m} - {nombres_meses[m]}" for m in meses]
+    meses_seleccionados = st.sidebar.multiselect(
         "📆 Meses",
-        meses,
-        default=meses
+        meses_nombres,
+        default=meses_nombres,
+        key="meses"
     )
+    
+    # Convertir selección de meses
+    meses_filtro = [int(m.split(' - ')[0]) for m in meses_seleccionados]
+    
+    st.sidebar.markdown("---")
+    
+    # ===== SECCIÓN MARCAS =====
+    st.sidebar.markdown("#### 🏷️ Filtros de Marca")
+    
+    # Obtener marcas únicas
+    marcas = sorted(df['marca'].unique())
+    marcas_seleccionadas = st.sidebar.multiselect(
+        "🎯 Marcas",
+        marcas,
+        default=marcas,
+        key="marcas",
+        help="Filtrar por marca específica"
+    )
+    
+    # Opción "Todas las marcas"
+    if "Todas" not in marcas_seleccionadas and len(marcas_seleccionadas) == 0:
+        marcas_seleccionadas = marcas
+    
+    st.sidebar.markdown("---")
+    
+    # ===== SECCIÓN PROVEEDORES =====
+    st.sidebar.markdown("#### 🏭 Filtros de Proveedor")
+    
+    # Obtener proveedores únicos
+    proveedores = sorted(df['proveedor'].unique())
+    proveedores_seleccionados = st.sidebar.multiselect(
+        "📦 Proveedores",
+        proveedores,
+        default=proveedores,
+        key="proveedores",
+        help="Filtrar por proveedor específico"
+    )
+    
+    st.sidebar.markdown("---")
+    
+    # ===== SECCIÓN PRODUCTOS =====
+    st.sidebar.markdown("#### 📦 Filtros de Producto")
     
     # Filtro de producto
     productos = sorted(df['producto'].unique())
     producto_seleccionado = st.sidebar.multiselect(
         "📦 Productos",
         productos,
-        default=productos
+        default=productos,
+        key="productos"
     )
     
     # Filtro de categoría
@@ -373,18 +478,67 @@ def aplicar_filtros(df):
     categoria_seleccionada = st.sidebar.multiselect(
         "🏷️ Categorías",
         categorias,
-        default=categorias
+        default=categorias,
+        key="categorias"
     )
     
-    # Aplicar filtros
-    filtro = df[
-        (df['anio'].isin(anio_seleccionado)) &
-        (df['mes'].isin(mes_seleccionado)) &
-        (df['producto'].isin(producto_seleccionado)) &
-        (df['categoria'].isin(categoria_seleccionada))
-    ]
+    st.sidebar.markdown("---")
     
-    return filtro
+    # Mostrar resumen de filtros
+    st.sidebar.markdown("#### 📊 Resumen de Filtros")
+    
+    # Aplicar todos los filtros
+    filtro = df.copy()
+    
+    # Aplicar filtro de rango de fechas
+    if len(rango_fechas) == 2:
+        filtro = filtro[
+            (filtro['fecha'].dt.date >= rango_fechas[0]) &
+            (filtro['fecha'].dt.date <= rango_fechas[1])
+        ]
+    
+    # Aplicar filtro de años
+    filtro = filtro[filtro['anio'].isin(anio_seleccionado)]
+    
+    # Aplicar filtro de meses
+    if meses_filtro:
+        filtro = filtro[filtro['mes'].isin(meses_filtro)]
+    
+    # Aplicar filtro de marcas
+    if marcas_seleccionadas:
+        filtro = filtro[filtro['marca'].isin(marcas_seleccionadas)]
+    
+    # Aplicar filtro de proveedores
+    if proveedores_seleccionados:
+        filtro = filtro[filtro['proveedor'].isin(proveedores_seleccionados)]
+    
+    # Aplicar filtro de productos
+    if producto_seleccionado:
+        filtro = filtro[filtro['producto'].isin(producto_seleccionado)]
+    
+    # Aplicar filtro de categorías
+    if categoria_seleccionada:
+        filtro = filtro[filtro['categoria'].isin(categoria_seleccionada)]
+    
+    # Mostrar estadísticas de filtros en sidebar
+    with st.sidebar.expander("📈 Estadísticas de Filtros", expanded=False):
+        st.metric("Registros filtrados", f"{len(filtro):,}")
+        st.metric("Ventas totales", f"{int(filtro['cantidad'].sum()):,}")
+        st.metric("Marcas seleccionadas", len(marcas_seleccionadas))
+        st.metric("Proveedores seleccionados", len(proveedores_seleccionados))
+    
+    # Guardar filtros aplicados para exportación
+    filtros_dict = {
+        'Rango de fechas': f"{rango_fechas[0]} a {rango_fechas[1]}" if len(rango_fechas) == 2 else "Todos",
+        'Años': ', '.join(map(str, anio_seleccionado)),
+        'Meses': ', '.join([nombres_meses[m] for m in meses_filtro]),
+        'Marcas': ', '.join(marcas_seleccionadas) if marcas_seleccionadas else "Todas",
+        'Proveedores': ', '.join(proveedores_seleccionados) if proveedores_seleccionados else "Todos",
+        'Productos': ', '.join(producto_seleccionado) if producto_seleccionado else "Todos",
+        'Categorías': ', '.join(categoria_seleccionada) if categoria_seleccionada else "Todas"
+    }
+    
+    return filtro, filtros_dict
 
 # ======================================
 # KPIS
@@ -400,7 +554,11 @@ def mostrar_kpis(filtro):
     else:
         crecimiento = 0
     
-    col1, col2, col3 = st.columns(3)
+    # KPIs adicionales
+    marcas_unicas = filtro['marca'].nunique()
+    proveedores_unicos = filtro['proveedor'].nunique()
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         st.markdown(f"""
@@ -431,11 +589,31 @@ def mostrar_kpis(filtro):
         </div>
         """, unsafe_allow_html=True)
     
+    with col4:
+        st.markdown(f"""
+        <div class="kpi">
+            <h3>🏷️ Marcas</h3>
+            <div class="value">{marcas_unicas}</div>
+            <div class="growth growth-positive">Activas</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col5:
+        st.markdown(f"""
+        <div class="kpi">
+            <h3>🏭 Proveedores</h3>
+            <div class="value">{proveedores_unicos}</div>
+            <div class="growth growth-positive">Activos</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     return {
         'total': ventas_total,
         'v2024': ventas_2024,
         'v2025': ventas_2025,
-        'crecimiento': crecimiento
+        'crecimiento': crecimiento,
+        'marcas': marcas_unicas,
+        'proveedores': proveedores_unicos
     }
 
 # ======================================
@@ -489,6 +667,52 @@ def graficos_principales(filtro):
     )
     fig2.update_traces(marker_size=8)
     st.plotly_chart(fig2, use_container_width=True)
+    
+    # Gráfico por marca
+    st.markdown("### 🏷️ Ventas por Marca")
+    
+    ventas_marca = filtro.groupby('marca')['cantidad'].sum().sort_values(ascending=False).head(10)
+    
+    fig3 = px.bar(
+        ventas_marca,
+        x=ventas_marca.values,
+        y=ventas_marca.index,
+        orientation='h',
+        text_auto=True,
+        color=ventas_marca.values,
+        color_continuous_scale='Blues',
+        title="Top 10 Marcas"
+    )
+    fig3.update_layout(
+        template='plotly_white',
+        height=400,
+        xaxis_title="Unidades Vendidas",
+        yaxis_title="Marca"
+    )
+    st.plotly_chart(fig3, use_container_width=True)
+    
+    # Gráfico por proveedor
+    st.markdown("### 🏭 Ventas por Proveedor")
+    
+    ventas_proveedor = filtro.groupby('proveedor')['cantidad'].sum().sort_values(ascending=False).head(10)
+    
+    fig4 = px.bar(
+        ventas_proveedor,
+        x=ventas_proveedor.values,
+        y=ventas_proveedor.index,
+        orientation='h',
+        text_auto=True,
+        color=ventas_proveedor.values,
+        color_continuous_scale='Greens',
+        title="Top 10 Proveedores"
+    )
+    fig4.update_layout(
+        template='plotly_white',
+        height=400,
+        xaxis_title="Unidades Vendidas",
+        yaxis_title="Proveedor"
+    )
+    st.plotly_chart(fig4, use_container_width=True)
 
 def crear_heatmap(filtro):
     st.markdown("### 🌡️ Heatmap de Ventas")
@@ -552,7 +776,7 @@ def mostrar_top_productos(filtro):
 # BOTONES DE EXPORTACIÓN
 # ======================================
 
-def botones_exportacion(filtro, kpis):
+def botones_exportacion(filtro, kpis, filtros_aplicados):
     col1, col2 = st.columns(2)
     
     with col1:
@@ -565,7 +789,7 @@ def botones_exportacion(filtro, kpis):
     
     with col2:
         if st.button("📄 Exportar a PDF", use_container_width=True):
-            pdf_data = exportar_pdf(filtro, kpis)
+            pdf_data = exportar_pdf(filtro, kpis, filtros_aplicados)
             b64 = base64.b64encode(pdf_data).decode()
             href = f'<a href="data:application/pdf;base64,{b64}" download="reporte_ventas.pdf">📥 Descargar PDF</a>'
             st.markdown(href, unsafe_allow_html=True)
@@ -616,10 +840,12 @@ def main():
         
         # Mostrar estado de datos
         if st.session_state.datos_cargados:
-            st.info(f"📊 Datos: {len(st.session_state.df)} registros")
-        
-        st.markdown("---")
-        st.caption("💡 **Sugerencia:** Los archivos Excel deben tener columnas de fecha y cantidad")
+            st.info(f"📊 Datos: {len(st.session_state.df):,} registros")
+            
+            # Mostrar columnas disponibles
+            with st.expander("📋 Columnas disponibles"):
+                for col in st.session_state.df.columns:
+                    st.caption(f"• {col}")
     
     # Main content
     if not st.session_state.datos_cargados:
@@ -628,7 +854,7 @@ def main():
         <div style="text-align: center; padding: 3rem;">
             <h1>📊 Dashboard Corporativo de Ventas</h1>
             <p style="color: #64748b; font-size: 1.1rem; margin-top: 1rem;">
-                Bienvenido al sistema de análisis de ventas
+                Sistema avanzado de análisis de ventas con filtros por marca y proveedor
             </p>
             <div style="margin-top: 2rem;">
                 <p style="color: #3b82f6;">Para comenzar, carga tus archivos Excel en el menú lateral</p>
@@ -643,34 +869,56 @@ def main():
             
             1. **Cargar datos:** Usa el menú lateral para cargar archivos Excel
             2. **Formato esperado:** Los archivos deben tener columnas de fecha y cantidad
-            3. **Datos de ejemplo:** Puedes probar con los datos de ejemplo
-            4. **Filtros:** Una vez cargados los datos, usa los filtros para analizar
+            3. **Filtros disponibles:** 
+               - 📅 Fechas (rango, años, meses)
+               - 🏷️ Marcas
+               - 🏭 Proveedores
+               - 📦 Productos
+               - 🏷️ Categorías
+            4. **Datos de ejemplo:** Puedes probar con los datos de ejemplo
             5. **Exportar:** Genera reportes en Excel o PDF
             
             ### Columnas recomendadas:
             - Fecha (fecha, date)
             - Cantidad/Ventas (cantidad, venta, monto)
+            - Marca (marca, brand)
+            - Proveedor (proveedor, supplier)
             - Producto (opcional)
             - Categoría (opcional)
             """)
     else:
         # Aplicar filtros
-        filtro = aplicar_filtros(st.session_state.df)
+        filtro, filtros_aplicados = aplicar_filtros(st.session_state.df)
         
         if len(filtro) == 0:
-            st.warning("⚠️ No hay datos con los filtros seleccionados")
+            st.warning("⚠️ No hay datos con los filtros seleccionados. Por favor, ajusta los filtros.")
             return
         
         # Título principal
         st.markdown("# 📊 Dashboard Corporativo de Ventas")
         st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # Mostrar filtros activos
+        with st.expander("🔍 Filtros activos", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**📅 Fechas:**")
+                st.caption(f"• {filtros_aplicados['Rango de fechas']}")
+                st.caption(f"• Años: {filtros_aplicados['Años']}")
+                st.caption(f"• Meses: {filtros_aplicados['Meses']}")
+            with col2:
+                st.markdown("**🏷️ Comerciales:**")
+                st.caption(f"• Marcas: {filtros_aplicados['Marcas']}")
+                st.caption(f"• Proveedores: {filtros_aplicados['Proveedores']}")
+                st.caption(f"• Productos: {filtros_aplicados['Productos']}")
+        
         st.markdown("---")
         
         # Mostrar KPIs
         kpis = mostrar_kpis(filtro)
         
         # Botones de exportación
-        botones_exportacion(filtro, kpis)
+        botones_exportacion(filtro, kpis, filtros_aplicados)
         
         st.markdown("---")
         
@@ -702,9 +950,12 @@ def main():
         with col3:
             st.metric("⭐ Promedio diario", f"{filtro['cantidad'].mean():,.0f}")
         
-        # Mostrar dataframe
+        # Mostrar dataframe con todas las columnas relevantes
+        columnas_mostrar = ['fecha', 'producto', 'marca', 'proveedor', 'categoria', 'cantidad', 'anio', 'mes_nombre']
+        columnas_disponibles = [col for col in columnas_mostrar if col in filtro.columns]
+        
         st.dataframe(
-            filtro[['fecha', 'producto', 'categoria', 'cantidad', 'anio', 'mes_nombre']].sort_values('fecha', ascending=False),
+            filtro[columnas_disponibles].sort_values('fecha', ascending=False),
             use_container_width=True,
             height=400
         )
@@ -712,7 +963,7 @@ def main():
         # Footer
         st.markdown("""
         <div class="footer">
-            <p>Dashboard Corporativo de Ventas | Desarrollado con Streamlit</p>
+            <p>Dashboard Corporativo de Ventas | Desarrollado con Streamlit | Filtros por Marca y Proveedor</p>
         </div>
         """, unsafe_allow_html=True)
 
