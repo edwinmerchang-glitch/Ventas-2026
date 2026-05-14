@@ -494,7 +494,8 @@ def aplicar_filtros(df):
         ]
     
     # Aplicar filtro de años
-    filtro = filtro[filtro['anio'].isin(anio_seleccionado)]
+    if anio_seleccionado:
+        filtro = filtro[filtro['anio'].isin(anio_seleccionado)]
     
     # Aplicar filtro de meses
     if meses_filtro:
@@ -523,15 +524,15 @@ def aplicar_filtros(df):
         st.metric("Marcas seleccionadas", len(marcas_seleccionadas))
         st.metric("Proveedores seleccionados", len(proveedores_seleccionados))
     
-    # Guardar filtros aplicados para exportación
+    # Guardar filtros aplicados para exportación - Versión corregida
     filtros_dict = {
         'Rango de fechas': f"{rango_fechas[0]} a {rango_fechas[1]}" if len(rango_fechas) == 2 else "Todos",
-        'Años': ', '.join(map(str, anio_seleccionado)),
-        'Meses': ', '.join([nombres_meses[m] for m in meses_filtro]),
-        'Marcas': ', '.join(marcas_seleccionadas) if marcas_seleccionadas else "Todas",
-        'Proveedores': ', '.join(proveedores_seleccionados) if proveedores_seleccionados else "Todos",
-        'Productos': ', '.join(producto_seleccionado) if producto_seleccionado else "Todos",
-        'Categorías': ', '.join(categoria_seleccionada) if categoria_seleccionada else "Todas"
+        'Años': ', '.join([str(a) for a in anio_seleccionado]) if anio_seleccionado else "Todos",
+        'Meses': ', '.join([nombres_meses[m] for m in meses_filtro]) if meses_filtro else "Todos",
+        'Marcas': ', '.join([str(m) for m in marcas_seleccionadas]) if marcas_seleccionadas else "Todas",
+        'Proveedores': ', '.join([str(p) for p in proveedores_seleccionados]) if proveedores_seleccionados else "Todos",
+        'Productos': ', '.join([str(prod) for prod in producto_seleccionado]) if producto_seleccionado else "Todos",
+        'Categorías': ', '.join([str(cat) for cat in categoria_seleccionada]) if categoria_seleccionada else "Todas"
     }
     
     return filtro, filtros_dict
