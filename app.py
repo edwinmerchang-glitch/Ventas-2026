@@ -186,8 +186,56 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ======================================
-# FUNCIONES DE CARGA DE ARCHIVOS
+# FUNCIONES DE LIMPIEZA DE DATOS
 # ======================================
+
+def limpiar_dataframe(df):
+    """Limpia el dataframe de valores erróneos"""
+    
+    # Limpiar columna de año - asegurar que sea numérico
+    if 'anio' in df.columns:
+        df['anio'] = pd.to_numeric(df['anio'], errors='coerce')
+    
+    # Limpiar columna de mes - asegurar que sea numérico
+    if 'mes' in df.columns:
+        df['mes'] = pd.to_numeric(df['mes'], errors='coerce')
+    
+    # Limpiar columna de cantidad
+    if 'cantidad' in df.columns:
+        df['cantidad'] = pd.to_numeric(df['cantidad'], errors='coerce').fillna(0)
+    
+    # Eliminar filas con fechas inválidas
+    if 'fecha' in df.columns:
+        df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
+        df = df.dropna(subset=['fecha'])
+        
+        # Recalcular año y mes si es necesario
+        df['anio'] = df['fecha'].dt.year
+        df['mes'] = df['fecha'].dt.month
+        df['mes_nombre'] = df['fecha'].dt.strftime('%B')
+        df['dia'] = df['fecha'].dt.day
+        df['trimestre'] = df['fecha'].dt.quarter
+    
+    # Limpiar valores nulos en columnas importantes
+    df['producto'] = df['producto'].fillna('No especificado')
+    df['marca'] = df['marca'].fillna('No especificada')
+    df['proveedor'] = df['proveedor'].fillna('No especificado')
+    df['categoria'] = df['categoria'].fillna('General')
+    
+    # Eliminar filas donde el año sea inválido (NaN o fuera de rango)
+    df = df.dropna(subset=['anio'])
+    df = df[(df['anio'] >= 2000) & (df['anio'] <= 2030)]
+    
+    # Limpiar strings que parecen fechas mal formateadas
+    texto_columnas = ['producto', 'marca', 'proveedor', 'categoria']
+    for col in texto_columnas:
+        if col in df.columns:
+            # Reemplazar valores que parecen números de año
+            df[col] = df[col].astype(str)
+            df[col] = df[col].apply(lambda x: 'No especificado' if x.isdigit() and len(x) == 4 else x)
+            df[col] = df[col].apply(lambda x: 'No especificado' if x in ['2024', '2025', '2026', 'ZUZUS'] else x)
+    
+    return df
 
 def cargar_excel(file):
     """Carga archivo Excel y procesa los datos"""
@@ -223,21 +271,6 @@ def cargar_excel(file):
         # Renombrar columnas
         df.rename(columns={fecha_col: 'fecha', cantidad_col: 'cantidad'}, inplace=True)
         
-        # Procesar fechas
-        df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
-        df = df.dropna(subset=['fecha'])
-        
-        # Procesar cantidades
-        df['cantidad'] = pd.to_numeric(df['cantidad'], errors='coerce').fillna(0)
-        
-        # Crear columnas adicionales
-        df['anio'] = df['fecha'].dt.year
-        df['mes'] = df['fecha'].dt.month
-        df['dia'] = df['fecha'].dt.day
-        df['mes_nombre'] = df['fecha'].dt.strftime('%B')
-        df['semana'] = df['fecha'].dt.isocalendar().week
-        df['trimestre'] = df['fecha'].dt.quarter
-        
         # Buscar o crear columna de producto
         if 'producto' not in df.columns:
             for col in columnas:
@@ -247,7 +280,7 @@ def cargar_excel(file):
             else:
                 df['producto'] = 'Producto General'
         
-        # Buscar o crear columna de categoría/marca
+        # Buscar o crear columna de marca
         if 'marca' not in df.columns:
             for col in columnas:
                 if 'marca' in col or 'brand' in col:
@@ -273,6 +306,9 @@ def cargar_excel(file):
                     break
             else:
                 df['categoria'] = 'General'
+        
+        # Aplicar limpieza de datos
+        df = limpiar_dataframe(df)
         
         return df, True, "✅ Datos cargados correctamente"
     except Exception as e:
@@ -301,12 +337,7 @@ def cargar_datos_ejemplo():
             })
     
     df = pd.DataFrame(data)
-    df['anio'] = df['fecha'].dt.year
-    df['mes'] = df['fecha'].dt.month
-    df['dia'] = df['fecha'].dt.day
-    df['mes_nombre'] = df['fecha'].dt.strftime('%B')
-    df['semana'] = df['fecha'].dt.isocalendar().week
-    df['trimestre'] = df['fecha'].dt.quarter
+    df = limpiar_dataframe(df)
     
     return df
 
@@ -400,6 +431,7 @@ def aplicar_filtros(df):
     
     # Filtro de año
     anios = sorted(df['anio'].unique())
+    anios = [a for a in anios if pd.notna(a)]  # Limpiar valores NaN
     anio_seleccionado = st.sidebar.multiselect(
         "📅 Años",
         anios,
@@ -409,12 +441,13 @@ def aplicar_filtros(df):
     
     # Filtro de mes
     meses = sorted(df['mes'].unique())
+    meses = [m for m in meses if pd.notna(m)]  # Limpiar valores NaN
     nombres_meses = {
         1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
         5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
         9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
     }
-    meses_nombres = [f"{m} - {nombres_meses[m]}" for m in meses]
+    meses_nombres = [f"{m} - {nombres_meses[m]}" for m in meses if m in nombres_meses]
     meses_seleccionados = st.sidebar.multiselect(
         "📆 Meses",
         meses_nombres,
@@ -423,19 +456,25 @@ def aplicar_filtros(df):
     )
     
     # Convertir selección de meses
-    meses_filtro = [int(m.split(' - ')[0]) for m in meses_seleccionados]
+    meses_filtro = []
+    for m in meses_seleccionados:
+        try:
+            meses_filtro.append(int(m.split(' - ')[0]))
+        except:
+            pass
     
     st.sidebar.markdown("---")
     
     # ===== SECCIÓN MARCAS =====
     st.sidebar.markdown("#### 🏷️ Filtros de Marca")
     
-    # Obtener marcas únicas
+    # Obtener marcas únicas (excluyendo valores no deseados)
     marcas = sorted(df['marca'].unique())
+    marcas = [m for m in marcas if m not in ['No especificada', 'General', 'ZUZUS', '2024', '2025']]
     marcas_seleccionadas = st.sidebar.multiselect(
         "🎯 Marcas",
         marcas,
-        default=marcas,
+        default=marcas if marcas else ['General'],
         key="marcas",
         help="Filtrar por marca específica"
     )
@@ -447,10 +486,11 @@ def aplicar_filtros(df):
     
     # Obtener proveedores únicos
     proveedores = sorted(df['proveedor'].unique())
+    proveedores = [p for p in proveedores if p not in ['No especificado', 'General']]
     proveedores_seleccionados = st.sidebar.multiselect(
         "📦 Proveedores",
         proveedores,
-        default=proveedores,
+        default=proveedores if proveedores else ['General'],
         key="proveedores",
         help="Filtrar por proveedor específico"
     )
@@ -462,19 +502,21 @@ def aplicar_filtros(df):
     
     # Filtro de producto
     productos = sorted(df['producto'].unique())
+    productos = [p for p in productos if p not in ['No especificado', 'General']]
     producto_seleccionado = st.sidebar.multiselect(
         "📦 Productos",
         productos,
-        default=productos,
+        default=productos if productos else ['General'],
         key="productos"
     )
     
     # Filtro de categoría
     categorias = sorted(df['categoria'].unique())
+    categorias = [c for c in categorias if c not in ['No especificada', 'General']]
     categoria_seleccionada = st.sidebar.multiselect(
         "🏷️ Categorías",
         categorias,
-        default=categorias,
+        default=categorias if categorias else ['General'],
         key="categorias"
     )
     
@@ -524,11 +566,11 @@ def aplicar_filtros(df):
         st.metric("Marcas seleccionadas", len(marcas_seleccionadas))
         st.metric("Proveedores seleccionados", len(proveedores_seleccionados))
     
-    # Guardar filtros aplicados para exportación - Versión corregida
+    # Guardar filtros aplicados para exportación
     filtros_dict = {
         'Rango de fechas': f"{rango_fechas[0]} a {rango_fechas[1]}" if len(rango_fechas) == 2 else "Todos",
         'Años': ', '.join([str(a) for a in anio_seleccionado]) if anio_seleccionado else "Todos",
-        'Meses': ', '.join([nombres_meses[m] for m in meses_filtro]) if meses_filtro else "Todos",
+        'Meses': ', '.join([nombres_meses.get(m, str(m)) for m in meses_filtro]) if meses_filtro else "Todos",
         'Marcas': ', '.join([str(m) for m in marcas_seleccionadas]) if marcas_seleccionadas else "Todas",
         'Proveedores': ', '.join([str(p) for p in proveedores_seleccionados]) if proveedores_seleccionados else "Todos",
         'Productos': ', '.join([str(prod) for prod in producto_seleccionado]) if producto_seleccionado else "Todos",
@@ -543,8 +585,8 @@ def aplicar_filtros(df):
 
 def mostrar_kpis(filtro):
     ventas_total = int(filtro['cantidad'].sum())
-    ventas_2024 = int(filtro[filtro['anio'] == 2024]['cantidad'].sum())
-    ventas_2025 = int(filtro[filtro['anio'] == 2025]['cantidad'].sum())
+    ventas_2024 = int(filtro[filtro['anio'] == 2024]['cantidad'].sum()) if 2024 in filtro['anio'].values else 0
+    ventas_2025 = int(filtro[filtro['anio'] == 2025]['cantidad'].sum()) if 2025 in filtro['anio'].values else 0
     
     if ventas_2024 > 0:
         crecimiento = ((ventas_2025 - ventas_2024) / ventas_2024) * 100
@@ -623,23 +665,26 @@ def graficos_principales(filtro):
     
     ventas_anio = filtro.groupby('anio')['cantidad'].sum().reset_index()
     
-    fig1 = px.bar(
-        ventas_anio,
-        x='anio',
-        y='cantidad',
-        text_auto=True,
-        color='cantidad',
-        color_continuous_scale='Blues',
-        title="Ventas Totales por Año"
-    )
-    fig1.update_layout(
-        template='plotly_white',
-        height=400,
-        showlegend=False,
-        xaxis_title="Año",
-        yaxis_title="Unidades Vendidas"
-    )
-    st.plotly_chart(fig1, use_container_width=True)
+    if len(ventas_anio) > 0:
+        fig1 = px.bar(
+            ventas_anio,
+            x='anio',
+            y='cantidad',
+            text_auto=True,
+            color='cantidad',
+            color_continuous_scale='Blues',
+            title="Ventas Totales por Año"
+        )
+        fig1.update_layout(
+            template='plotly_white',
+            height=400,
+            showlegend=False,
+            xaxis_title="Año",
+            yaxis_title="Unidades Vendidas"
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.info("No hay datos para mostrar en el gráfico anual")
     
     # Gráfico por mes
     st.markdown("### 📈 Tendencia Mensual Comparativa")
@@ -647,69 +692,80 @@ def graficos_principales(filtro):
     ventas_mes = filtro.groupby(['anio', 'mes_nombre', 'mes'])['cantidad'].sum().reset_index()
     ventas_mes = ventas_mes.sort_values('mes')
     
-    fig2 = px.line(
-        ventas_mes,
-        x='mes_nombre',
-        y='cantidad',
-        color='anio',
-        markers=True,
-        title="Comparativo Mensual 2024 vs 2025",
-        color_discrete_sequence=['#3b82f6', '#10b981']
-    )
-    fig2.update_layout(
-        template='plotly_white',
-        height=450,
-        xaxis_title="Mes",
-        yaxis_title="Unidades Vendidas"
-    )
-    fig2.update_traces(marker_size=8)
-    st.plotly_chart(fig2, use_container_width=True)
+    if len(ventas_mes) > 0:
+        fig2 = px.line(
+            ventas_mes,
+            x='mes_nombre',
+            y='cantidad',
+            color='anio',
+            markers=True,
+            title="Comparativo Mensual 2024 vs 2025",
+            color_discrete_sequence=['#3b82f6', '#10b981']
+        )
+        fig2.update_layout(
+            template='plotly_white',
+            height=450,
+            xaxis_title="Mes",
+            yaxis_title="Unidades Vendidas"
+        )
+        fig2.update_traces(marker_size=8)
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No hay datos para mostrar en el gráfico mensual")
     
     # Gráfico por marca
     st.markdown("### 🏷️ Ventas por Marca")
     
     ventas_marca = filtro.groupby('marca')['cantidad'].sum().sort_values(ascending=False).head(10)
+    ventas_marca = ventas_marca[ventas_marca.index != 'No especificada']
     
-    fig3 = px.bar(
-        ventas_marca,
-        x=ventas_marca.values,
-        y=ventas_marca.index,
-        orientation='h',
-        text_auto=True,
-        color=ventas_marca.values,
-        color_continuous_scale='Blues',
-        title="Top 10 Marcas"
-    )
-    fig3.update_layout(
-        template='plotly_white',
-        height=400,
-        xaxis_title="Unidades Vendidas",
-        yaxis_title="Marca"
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+    if len(ventas_marca) > 0:
+        fig3 = px.bar(
+            ventas_marca,
+            x=ventas_marca.values,
+            y=ventas_marca.index,
+            orientation='h',
+            text_auto=True,
+            color=ventas_marca.values,
+            color_continuous_scale='Blues',
+            title="Top 10 Marcas"
+        )
+        fig3.update_layout(
+            template='plotly_white',
+            height=400,
+            xaxis_title="Unidades Vendidas",
+            yaxis_title="Marca"
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+    else:
+        st.info("No hay datos para mostrar en el gráfico de marcas")
     
     # Gráfico por proveedor
     st.markdown("### 🏭 Ventas por Proveedor")
     
     ventas_proveedor = filtro.groupby('proveedor')['cantidad'].sum().sort_values(ascending=False).head(10)
+    ventas_proveedor = ventas_proveedor[ventas_proveedor.index != 'No especificado']
     
-    fig4 = px.bar(
-        ventas_proveedor,
-        x=ventas_proveedor.values,
-        y=ventas_proveedor.index,
-        orientation='h',
-        text_auto=True,
-        color=ventas_proveedor.values,
-        color_continuous_scale='Greens',
-        title="Top 10 Proveedores"
-    )
-    fig4.update_layout(
-        template='plotly_white',
-        height=400,
-        xaxis_title="Unidades Vendidas",
-        yaxis_title="Proveedor"
-    )
-    st.plotly_chart(fig4, use_container_width=True)
+    if len(ventas_proveedor) > 0:
+        fig4 = px.bar(
+            ventas_proveedor,
+            x=ventas_proveedor.values,
+            y=ventas_proveedor.index,
+            orientation='h',
+            text_auto=True,
+            color=ventas_proveedor.values,
+            color_continuous_scale='Greens',
+            title="Top 10 Proveedores"
+        )
+        fig4.update_layout(
+            template='plotly_white',
+            height=400,
+            xaxis_title="Unidades Vendidas",
+            yaxis_title="Proveedor"
+        )
+        st.plotly_chart(fig4, use_container_width=True)
+    else:
+        st.info("No hay datos para mostrar en el gráfico de proveedores")
 
 def mostrar_top_productos(filtro):
     col1, col2 = st.columns(2)
@@ -717,32 +773,40 @@ def mostrar_top_productos(filtro):
     with col1:
         st.markdown("### 🏆 Top 5 Productos")
         top_productos = filtro.groupby('producto')['cantidad'].sum().sort_values(ascending=False).head(5)
+        top_productos = top_productos[top_productos.index != 'No especificado']
         
-        fig = px.bar(
-            top_productos,
-            x=top_productos.values,
-            y=top_productos.index,
-            orientation='h',
-            text_auto=True,
-            color=top_productos.values,
-            color_continuous_scale='Blues',
-            title="Productos Más Vendidos"
-        )
-        fig.update_layout(template='plotly_white', height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(top_productos) > 0:
+            fig = px.bar(
+                top_productos,
+                x=top_productos.values,
+                y=top_productos.index,
+                orientation='h',
+                text_auto=True,
+                color=top_productos.values,
+                color_continuous_scale='Blues',
+                title="Productos Más Vendidos"
+            )
+            fig.update_layout(template='plotly_white', height=400)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos para mostrar en top productos")
     
     with col2:
         st.markdown("### 🎯 Distribución por Categoría")
         top_categorias = filtro.groupby('categoria')['cantidad'].sum()
+        top_categorias = top_categorias[top_categorias.index != 'General']
         
-        fig = px.pie(
-            values=top_categorias.values,
-            names=top_categorias.index,
-            title="Ventas por Categoría",
-            color_discrete_sequence=px.colors.sequential.Blues_r
-        )
-        fig.update_layout(template='plotly_white', height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        if len(top_categorias) > 0:
+            fig = px.pie(
+                values=top_categorias.values,
+                names=top_categorias.index,
+                title="Ventas por Categoría",
+                color_discrete_sequence=px.colors.sequential.Blues_r
+            )
+            fig.update_layout(template='plotly_white', height=400)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos para mostrar en distribución por categoría")
 
 # ======================================
 # BOTONES DE EXPORTACIÓN
@@ -795,6 +859,7 @@ def main():
                     
                     if success1 and success2:
                         st.session_state.df = pd.concat([df1, df2], ignore_index=True)
+                        st.session_state.df = limpiar_dataframe(st.session_state.df)
                         st.session_state.datos_cargados = True
                         st.success("✅ Datos cargados correctamente")
                     else:
@@ -920,8 +985,13 @@ def main():
         columnas_mostrar = ['fecha', 'producto', 'marca', 'proveedor', 'categoria', 'cantidad', 'anio', 'mes_nombre']
         columnas_disponibles = [col for col in columnas_mostrar if col in filtro.columns]
         
+        # Limpiar dataframe para mostrar (reemplazar valores no deseados)
+        df_mostrar = filtro[columnas_disponibles].copy()
+        df_mostrar = df_mostrar[df_mostrar['producto'] != 'No especificado']
+        df_mostrar = df_mostrar[df_mostrar['marca'] != 'No especificada']
+        
         st.dataframe(
-            filtro[columnas_disponibles].sort_values('fecha', ascending=False),
+            df_mostrar.sort_values('fecha', ascending=False),
             use_container_width=True,
             height=400
         )
