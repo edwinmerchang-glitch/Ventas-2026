@@ -6,3 +6,5 @@ sqlalchemy
 fpdf
 xlsxwriter
 numpy
+python-dateutil
+pillow
