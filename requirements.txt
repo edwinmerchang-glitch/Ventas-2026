@@ -3,3 +3,6 @@ pandas
 plotly
 openpyxl
 sqlalchemy
+fpdf
+xlsxwriter
+numpy
