@@ -145,14 +145,6 @@ st.markdown("""
         font-size: 0.8rem;
     }
     
-    /* Estilo para el calendario */
-    .calendar-container {
-        background: white;
-        border-radius: 10px;
-        padding: 10px;
-        margin: 10px 0;
-    }
-    
     @media (max-width: 768px) {
         .kpi .value {
             font-size: 1.2rem;
@@ -216,71 +208,105 @@ def cargar_excel(file):
         return None, False
 
 # ======================================
-# FUNCIÓN PARA CREAR TABLA COMPARATIVA
+# FUNCIÓN PARA CREAR TABLA COMPARATIVA (CORREGIDA)
 # ======================================
 
 @st.cache_data(ttl=300)
-def crear_tabla_comparativa(df, columna_producto, top_n=None):
-    """Crea tabla comparativa de productos"""
+def crear_tabla_comparativa(df, columna_producto, año1=None, año2=None, top_n=None):
+    """Crea tabla comparativa de productos entre dos años seleccionados"""
     
     if df is None or len(df) == 0:
-        return pd.DataFrame()
+        return pd.DataFrame(), []
     
     if columna_producto not in df.columns:
         st.error(f"❌ La columna '{columna_producto}' no existe en los datos")
-        return pd.DataFrame()
+        return pd.DataFrame(), []
     
     if 'cantidad' not in df.columns:
         st.error("❌ La columna 'cantidad' no existe en los datos")
-        return pd.DataFrame()
+        return pd.DataFrame(), []
     
     if 'anio' not in df.columns:
         st.error("❌ La columna 'anio' no existe en los datos")
-        return pd.DataFrame()
+        return pd.DataFrame(), []
+    
+    # Obtener años disponibles
+    años_disponibles = sorted(df['anio'].unique())
+    
+    # Si no se especifican años, usar los dos primeros años disponibles
+    if año1 is None and len(años_disponibles) >= 1:
+        año1 = años_disponibles[0]
+    if año2 is None and len(años_disponibles) >= 2:
+        año2 = años_disponibles[1]
+    
+    # Si solo hay un año, duplicarlo para comparación
+    if año2 is None and len(años_disponibles) == 1:
+        año2 = año1
+    
+    # Filtrar datos por los años seleccionados
+    df_filtrado = df[df['anio'].isin([año1, año2])]
     
     # Agrupar por producto y año
-    ventas_producto = df.groupby([columna_producto, 'anio'])['cantidad'].sum().reset_index()
+    ventas_producto = df_filtrado.groupby([columna_producto, 'anio'])['cantidad'].sum().reset_index()
     
-    # Pivotar
+    # Pivotar para tener los años como columnas
     tabla_pivot = ventas_producto.pivot(index=columna_producto, columns='anio', values='cantidad').fillna(0)
     
-    # Asegurar columnas
-    if 2024 not in tabla_pivot.columns:
-        tabla_pivot[2024] = 0
-    if 2025 not in tabla_pivot.columns:
-        tabla_pivot[2025] = 0
+    # Renombrar columnas dinámicamente
+    nuevas_columnas = []
+    for col in tabla_pivot.columns:
+        nuevas_columnas.append(f'ventas_{int(col)}')
+    tabla_pivot.columns = nuevas_columnas
     
-    tabla_pivot.columns = ['ventas_2024', 'ventas_2025']
-    tabla_pivot['diferencia'] = tabla_pivot['ventas_2025'] - tabla_pivot['ventas_2024']
+    # Asegurar que ambas columnas existan
+    col_año1 = f'ventas_{año1}'
+    col_año2 = f'ventas_{año2}'
+    
+    if col_año1 not in tabla_pivot.columns:
+        tabla_pivot[col_año1] = 0
+    if col_año2 not in tabla_pivot.columns:
+        tabla_pivot[col_año2] = 0
+    
+    # Calcular diferencia y variación
+    tabla_pivot['diferencia'] = tabla_pivot[col_año2] - tabla_pivot[col_año1]
     tabla_pivot['variacion_porcentaje'] = np.where(
-        tabla_pivot['ventas_2024'] > 0,
-        (tabla_pivot['diferencia'] / tabla_pivot['ventas_2024']) * 100,
+        tabla_pivot[col_año1] > 0,
+        (tabla_pivot['diferencia'] / tabla_pivot[col_año1]) * 100,
         0
     )
     
+    # Reset index
     tabla_comparativa = tabla_pivot.reset_index()
     tabla_comparativa = tabla_comparativa.rename(columns={columna_producto: 'producto'})
-    tabla_comparativa = tabla_comparativa[(tabla_comparativa['ventas_2024'] > 0) | (tabla_comparativa['ventas_2025'] > 0)]
-    tabla_comparativa = tabla_comparativa.sort_values('ventas_2024', ascending=False)
     
+    # Filtrar productos con ventas > 0
+    tabla_comparativa = tabla_comparativa[(tabla_comparativa[col_año1] > 0) | (tabla_comparativa[col_año2] > 0)]
+    
+    # Ordenar por ventas del primer año
+    tabla_comparativa = tabla_comparativa.sort_values(col_año1, ascending=False)
+    
+    # Limitar a top N
     if top_n and top_n != "Todos" and isinstance(top_n, int):
         tabla_comparativa = tabla_comparativa.head(top_n)
     
-    # Agregar total
+    # Agregar fila de total
     if len(tabla_comparativa) > 0:
+        total_ventas_año1 = tabla_comparativa[col_año1].sum()
+        total_ventas_año2 = tabla_comparativa[col_año2].sum()
+        total_diferencia = total_ventas_año2 - total_ventas_año1
+        total_variacion = ((total_ventas_año2 - total_ventas_año1) / total_ventas_año1 * 100) if total_ventas_año1 > 0 else 0
+        
         total_row = pd.DataFrame({
             'producto': ['**TOTAL**'],
-            'ventas_2024': [tabla_comparativa['ventas_2024'].sum()],
-            'ventas_2025': [tabla_comparativa['ventas_2025'].sum()],
-            'diferencia': [tabla_comparativa['diferencia'].sum()],
-            'variacion_porcentaje': [
-                ((tabla_comparativa['ventas_2025'].sum() - tabla_comparativa['ventas_2024'].sum()) / 
-                 tabla_comparativa['ventas_2024'].sum() * 100) if tabla_comparativa['ventas_2024'].sum() > 0 else 0
-            ]
+            col_año1: [total_ventas_año1],
+            col_año2: [total_ventas_año2],
+            'diferencia': [total_diferencia],
+            'variacion_porcentaje': [total_variacion]
         })
+        
         tabla_comparativa = pd.concat([tabla_comparativa, total_row], ignore_index=True)
     
-    return tabla_comparativa
+    return tabla_comparativa, [año1, año2]
 
 # ======================================
 # FILTROS AVANZADOS CON CALENDARIO
@@ -301,91 +327,89 @@ def aplicar_filtros_avanzados(df):
             st.caption(f"Desde: {df['fecha'].min().date()}")
             st.caption(f"Hasta: {df['fecha'].max().date()}")
     
-    # ===== FILTRO DE AÑOS =====
-    st.sidebar.markdown("### 📅 Filtros de Tiempo")
+    # ===== FILTRO DE AÑOS PARA COMPARACIÓN =====
+    st.sidebar.markdown("### 📅 Comparar Años")
     
     años_disponibles = sorted(df['anio'].unique()) if 'anio' in df.columns else []
-    if años_disponibles:
-        años_seleccionados = st.sidebar.multiselect(
-            "📅 Años",
-            options=años_disponibles,
-            default=años_disponibles,
-            key="anios_filtro"
-        )
-    else:
-        años_seleccionados = []
     
-    # ===== CALENDARIO - RANGO DE FECHAS =====
-    st.sidebar.markdown("#### 📆 Calendario - Rango de Fechas")
-    
-    if 'fecha' in df.columns:
-        fecha_min = df['fecha'].min().date()
-        fecha_max = df['fecha'].max().date()
-        
-        # Selector de rango de fechas
-        rango_fechas = st.sidebar.date_input(
-            "Selecciona rango de fechas",
-            [fecha_min, fecha_max],
-            min_value=fecha_min,
-            max_value=fecha_max,
-            key="rango_fechas"
-        )
-        
-        # Checkbox para usar rango de fechas
-        usar_rango_fechas = st.sidebar.checkbox("Activar rango de fechas personalizado", value=False)
-    else:
-        usar_rango_fechas = False
-        rango_fechas = []
-    
-    # ===== FILTRO DE MESES =====
-    st.sidebar.markdown("#### 📆 Meses")
-    
-    nombres_meses = {
-        1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
-        5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
-        9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
-    }
-    
-    meses_disponibles = sorted(df['mes'].unique()) if 'mes' in df.columns else []
-    meses_nombres = [f"{m} - {nombres_meses.get(m, '')}" for m in meses_disponibles if m in nombres_meses]
-    
-    meses_seleccionados = st.sidebar.multiselect(
-        "Selecciona meses",
-        options=meses_nombres,
-        default=meses_nombres,
-        key="meses_filtro"
-    )
-    
-    meses_filtro = [int(m.split(' - ')[0]) for m in meses_seleccionados]
-    
-    # ===== FILTRO DE DÍAS =====
-    st.sidebar.markdown("#### 📆 Días del mes")
-    
-    # Opción para seleccionar días específicos o rangos
-    tipo_filtro_dia = st.sidebar.radio(
-        "Tipo de filtro por día",
-        ["Todos los días", "Días específicos", "Rango de días"],
-        key="tipo_filtro_dia"
-    )
-    
-    dias_filtro = []
-    
-    if tipo_filtro_dia == "Días específicos":
-        dias_disponibles = list(range(1, 32))
-        dias_seleccionados = st.sidebar.multiselect(
-            "Selecciona días del mes",
-            options=dias_disponibles,
-            default=[],
-            key="dias_filtro"
-        )
-        dias_filtro = dias_seleccionados
-    elif tipo_filtro_dia == "Rango de días":
+    if len(años_disponibles) >= 2:
         col1, col2 = st.sidebar.columns(2)
         with col1:
-            dia_inicio = st.number_input("Día inicio", min_value=1, max_value=31, value=1, key="dia_inicio")
+            año_comparar_1 = st.selectbox(
+                "Año base",
+                options=años_disponibles,
+                index=0,
+                key="año_base"
+            )
         with col2:
-            dia_fin = st.number_input("Día fin", min_value=1, max_value=31, value=31, key="dia_fin")
-        dias_filtro = list(range(dia_inicio, dia_fin + 1))
+            año_comparar_2 = st.selectbox(
+                "Año comparar",
+                options=años_disponibles,
+                index=min(1, len(años_disponibles)-1),
+                key="año_comparar"
+            )
+    else:
+        año_comparar_1 = años_disponibles[0] if años_disponibles else None
+        año_comparar_2 = años_disponibles[0] if años_disponibles else None
+        st.sidebar.info(f"Solo se encontró el año {año_comparar_1}")
+    
+    st.sidebar.markdown("---")
+    
+    # ===== CALENDARIO - RANGO DE FECHAS =====
+    st.sidebar.markdown("#### 📆 Filtros Adicionales")
+    
+    # Checkbox para activar filtros adicionales
+    usar_filtros_avanzados = st.sidebar.checkbox("Activar filtros avanzados (meses/días)", value=False)
+    
+    meses_filtro = []
+    dias_filtro = []
+    
+    if usar_filtros_avanzados and 'fecha' in df.columns:
+        # Filtro de meses
+        st.sidebar.markdown("#### 📆 Meses")
+        
+        nombres_meses = {
+            1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
+            5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
+            9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+        }
+        
+        meses_disponibles = sorted(df['mes'].unique()) if 'mes' in df.columns else []
+        meses_nombres = [f"{m} - {nombres_meses.get(m, '')}" for m in meses_disponibles if m in nombres_meses]
+        
+        meses_seleccionados = st.sidebar.multiselect(
+            "Selecciona meses",
+            options=meses_nombres,
+            default=meses_nombres,
+            key="meses_filtro"
+        )
+        
+        meses_filtro = [int(m.split(' - ')[0]) for m in meses_seleccionados]
+        
+        # Filtro de días
+        st.sidebar.markdown("#### 📆 Días del mes")
+        
+        tipo_filtro_dia = st.sidebar.radio(
+            "Tipo de filtro por día",
+            ["Todos los días", "Días específicos", "Rango de días"],
+            key="tipo_filtro_dia"
+        )
+        
+        if tipo_filtro_dia == "Días específicos":
+            dias_seleccionados = st.sidebar.multiselect(
+                "Selecciona días del mes",
+                options=list(range(1, 32)),
+                default=[],
+                key="dias_filtro"
+            )
+            dias_filtro = dias_seleccionados
+        elif tipo_filtro_dia == "Rango de días":
+            col1, col2 = st.sidebar.columns(2)
+            with col1:
+                dia_inicio = st.number_input("Día inicio", min_value=1, max_value=31, value=1, key="dia_inicio")
+            with col2:
+                dia_fin = st.number_input("Día fin", min_value=1, max_value=31, value=31, key="dia_fin")
+            dias_filtro = list(range(dia_inicio, dia_fin + 1))
     
     # ===== FILTRO DE MARCAS =====
     st.sidebar.markdown("---")
@@ -394,7 +418,6 @@ def aplicar_filtros_avanzados(df):
     if 'marca' in df.columns:
         marcas_disponibles = sorted([str(m) for m in df['marca'].unique() if str(m) not in ['No especificada', 'General', 'nan', 'None']])
         if marcas_disponibles:
-            # Agregar opción "Todas"
             opciones_marcas = ["Todas"] + marcas_disponibles
             seleccion_marcas = st.sidebar.multiselect(
                 "🏷️ Marcas",
@@ -417,16 +440,8 @@ def aplicar_filtros_avanzados(df):
     # ===== APLICAR FILTROS =====
     filtro = df.copy()
     
-    # Filtrar por años
-    if años_seleccionados:
-        filtro = filtro[filtro['anio'].isin(años_seleccionados)]
-    
-    # Filtrar por rango de fechas
-    if usar_rango_fechas and len(rango_fechas) == 2 and 'fecha' in filtro.columns:
-        filtro = filtro[
-            (filtro['fecha'].dt.date >= rango_fechas[0]) &
-            (filtro['fecha'].dt.date <= rango_fechas[1])
-        ]
+    # Filtrar por años (solo los años seleccionados para comparación)
+    filtro = filtro[filtro['anio'].isin([año_comparar_1, año_comparar_2])]
     
     # Filtrar por meses
     if meses_filtro and 'mes' in filtro.columns:
@@ -445,37 +460,33 @@ def aplicar_filtros_avanzados(df):
         st.metric("Registros filtrados", f"{len(filtro):,}")
         if 'cantidad' in filtro.columns:
             st.metric("Ventas totales", f"{int(filtro['cantidad'].sum()):,}")
-        if 'anio' in filtro.columns:
-            años_filtro = sorted(filtro['anio'].unique())
-            st.metric("Años", ', '.join(map(str, años_filtro)) if años_filtro else "Ninguno")
+        st.metric("Años comparados", f"{año_comparar_1} vs {año_comparar_2}")
         if meses_filtro:
+            nombres_meses = {1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
+                           7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'}
             st.metric("Meses", ', '.join([nombres_meses.get(m, str(m)) for m in meses_filtro]))
-        if dias_filtro and len(dias_filtro) <= 10:
-            st.metric("Días", ', '.join(map(str, dias_filtro)))
-        elif dias_filtro:
-            st.metric("Días", f"{min(dias_filtro)} - {max(dias_filtro)}")
     
     # Guardar filtros para exportación
     filtros_dict = {
-        'Años': ', '.join(map(str, años_seleccionados)) if años_seleccionados else "Todos",
-        'Rango fechas': f"{rango_fechas[0]} a {rango_fechas[1]}" if usar_rango_fechas and len(rango_fechas) == 2 else "No aplica",
-        'Meses': ', '.join([nombres_meses.get(m, str(m)) for m in meses_filtro]) if meses_filtro else "Todos",
+        'Año base': año_comparar_1,
+        'Año comparar': año_comparar_2,
+        'Meses': ', '.join([str(m) for m in meses_filtro]) if meses_filtro else "Todos",
         'Días': ', '.join(map(str, dias_filtro[:10])) + ('...' if len(dias_filtro) > 10 else '') if dias_filtro else "Todos",
         'Marcas': ', '.join(marcas_seleccionadas[:3]) + ('...' if len(marcas_seleccionadas) > 3 else '') if marcas_seleccionadas else "Todas",
     }
     
-    return filtro, filtros_dict
+    return filtro, filtros_dict, año_comparar_1, año_comparar_2
 
 # ======================================
-# GRÁFICO DE VENTAS POR MES (COMPARATIVO)
+# GRÁFICO DE VENTAS POR MES
 # ======================================
 
-def mostrar_grafico_mensual(filtro):
+def mostrar_grafico_mensual(filtro, año1, año2):
     """Muestra gráfico de ventas por mes comparativo"""
     if filtro is None or len(filtro) == 0:
         return
     
-    st.markdown("### 📈 Ventas por Mes - Comparativo 2024 vs 2025")
+    st.markdown(f"### 📈 Ventas por Mes - Comparativo {año1} vs {año2}")
     
     if 'anio' in filtro.columns and 'mes' in filtro.columns and 'cantidad' in filtro.columns:
         ventas_mensuales = filtro.groupby(['anio', 'mes'])['cantidad'].sum().reset_index()
@@ -493,7 +504,7 @@ def mostrar_grafico_mensual(filtro):
             y='cantidad',
             color='anio',
             markers=True,
-            title="Comparativo Mensual de Ventas",
+            title=f"Comparativo Mensual de Ventas - {año1} vs {año2}",
             color_discrete_sequence=['#3b82f6', '#10b981']
         )
         fig.update_layout(
@@ -506,45 +517,45 @@ def mostrar_grafico_mensual(filtro):
     else:
         st.info("No hay datos suficientes para el gráfico mensual")
 
-def mostrar_grafico_diario(filtro):
+def mostrar_grafico_diario(filtro, año1, año2):
     """Muestra gráfico de ventas por día del mes"""
     if filtro is None or len(filtro) == 0:
         return
     
-    st.markdown("### 📊 Ventas por Día del Mes")
+    st.markdown(f"### 📊 Ventas por Día del Mes - {año1} vs {año2}")
     
     if 'dia' in filtro.columns and 'cantidad' in filtro.columns:
-        # Filtrar solo 2024 y 2025
-        df_2024 = filtro[filtro['anio'] == 2024] if 2024 in filtro['anio'].values else pd.DataFrame()
-        df_2025 = filtro[filtro['anio'] == 2025] if 2025 in filtro['anio'].values else pd.DataFrame()
+        # Filtrar los dos años
+        df_año1 = filtro[filtro['anio'] == año1] if año1 in filtro['anio'].values else pd.DataFrame()
+        df_año2 = filtro[filtro['anio'] == año2] if año2 in filtro['anio'].values else pd.DataFrame()
         
-        if len(df_2024) > 0 or len(df_2025) > 0:
+        if len(df_año1) > 0 or len(df_año2) > 0:
             fig = go.Figure()
             
-            if len(df_2024) > 0:
-                ventas_dia_2024 = df_2024.groupby('dia')['cantidad'].sum().reset_index()
+            if len(df_año1) > 0:
+                ventas_dia_año1 = df_año1.groupby('dia')['cantidad'].sum().reset_index()
                 fig.add_trace(go.Scatter(
-                    x=ventas_dia_2024['dia'],
-                    y=ventas_dia_2024['cantidad'],
+                    x=ventas_dia_año1['dia'],
+                    y=ventas_dia_año1['cantidad'],
                     mode='lines+markers',
-                    name='2024',
+                    name=str(año1),
                     line=dict(color='#3b82f6', width=2),
                     marker=dict(size=8)
                 ))
             
-            if len(df_2025) > 0:
-                ventas_dia_2025 = df_2025.groupby('dia')['cantidad'].sum().reset_index()
+            if len(df_año2) > 0:
+                ventas_dia_año2 = df_año2.groupby('dia')['cantidad'].sum().reset_index()
                 fig.add_trace(go.Scatter(
-                    x=ventas_dia_2025['dia'],
-                    y=ventas_dia_2025['cantidad'],
+                    x=ventas_dia_año2['dia'],
+                    y=ventas_dia_año2['cantidad'],
                     mode='lines+markers',
-                    name='2025',
+                    name=str(año2),
                     line=dict(color='#10b981', width=2),
                     marker=dict(size=8)
                 ))
             
             fig.update_layout(
-                title="Ventas por Día del Mes",
+                title=f"Ventas por Día del Mes - {año1} vs {año2}",
                 template='plotly_white',
                 height=400,
                 xaxis_title="Día del Mes",
@@ -553,7 +564,7 @@ def mostrar_grafico_diario(filtro):
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No hay datos para 2024 o 2025")
+            st.info(f"No hay datos para {año1} o {año2}")
     else:
         st.info("No hay datos suficientes para el gráfico diario")
 
@@ -576,7 +587,7 @@ def exportar_excel(df, tabla_comparativa, filtros_aplicados):
     output.seek(0)
     return output
 
-def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
+def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados, año1, año2):
     pdf = FPDF()
     pdf.add_page()
     
@@ -584,7 +595,7 @@ def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
     pdf.set_text_color(30, 41, 59)
     
     pdf.set_font("Arial", "B", 20)
-    pdf.cell(0, 15, "Reporte Comparativo de Ventas por Producto", 0, 1, "C")
+    pdf.cell(0, 15, f"Reporte Comparativo de Ventas {año1} vs {año2}", 0, 1, "C")
     pdf.set_font("Arial", "", 9)
     pdf.cell(0, 8, f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}", 0, 1, "C")
     pdf.ln(5)
@@ -602,28 +613,28 @@ def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 8, "Indicadores Clave", 0, 1)
     pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 7, f"Total Ventas 2024: {kpis['v2024']:,} unidades", 0, 1)
-    pdf.cell(0, 7, f"Total Ventas 2025: {kpis['v2025']:,} unidades", 0, 1)
+    pdf.cell(0, 7, f"Total Ventas {año1}: {kpis['v_año1']:,} unidades", 0, 1)
+    pdf.cell(0, 7, f"Total Ventas {año2}: {kpis['v_año2']:,} unidades", 0, 1)
     pdf.cell(0, 7, f"Crecimiento: {kpis['crecimiento']:.1f}%", 0, 1)
     
     pdf.ln(8)
     
     if tabla_comparativa is not None and len(tabla_comparativa) > 0:
         pdf.set_font("Arial", "B", 9)
-        pdf.cell(80, 8, "Producto", 1, 0, 'C')
-        pdf.cell(25, 8, "Ventas 2024", 1, 0, 'C')
-        pdf.cell(25, 8, "Ventas 2025", 1, 0, 'C')
+        pdf.cell(70, 8, "Producto", 1, 0, 'C')
+        pdf.cell(25, 8, f"{año1}", 1, 0, 'C')
+        pdf.cell(25, 8, f"{año2}", 1, 0, 'C')
         pdf.cell(25, 8, "Diferencia", 1, 0, 'C')
-        pdf.cell(30, 8, "Variación %", 1, 1, 'C')
+        pdf.cell(35, 8, "Variación %", 1, 1, 'C')
         
         pdf.set_font("Arial", "", 8)
         for _, row in tabla_comparativa.head(25).iterrows():
-            producto = row['producto'][:50] if row['producto'] != '**TOTAL**' else row['producto']
-            pdf.cell(80, 7, producto, 1, 0)
-            pdf.cell(25, 7, f"{int(row['ventas_2024']):,}", 1, 0, 'R')
-            pdf.cell(25, 7, f"{int(row['ventas_2025']):,}", 1, 0, 'R')
+            producto = row['producto'][:45] if row['producto'] != '**TOTAL**' else row['producto']
+            pdf.cell(70, 7, producto, 1, 0)
+            pdf.cell(25, 7, f"{int(row['ventas_2024'] if 'ventas_2024' in row else row['ventas_' + str(año1)]):,}", 1, 0, 'R')
+            pdf.cell(25, 7, f"{int(row['ventas_2025'] if 'ventas_2025' in row else row['ventas_' + str(año2)]):,}", 1, 0, 'R')
             pdf.cell(25, 7, f"{int(row['diferencia']):,}", 1, 0, 'R')
-            pdf.cell(30, 7, f"{row['variacion_porcentaje']:.1f}%", 1, 1, 'R')
+            pdf.cell(35, 7, f"{row['variacion_porcentaje']:.1f}%", 1, 1, 'R')
     
     return pdf.output(dest='S').encode('latin1')
 
@@ -631,21 +642,21 @@ def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados):
 # KPIS
 # ======================================
 
-def mostrar_kpis(filtro):
+def mostrar_kpis(filtro, año1, año2):
     if filtro is None or len(filtro) == 0:
-        return {'total': 0, 'v2024': 0, 'v2025': 0, 'crecimiento': 0}
+        return {'total': 0, 'v_año1': 0, 'v_año2': 0, 'crecimiento': 0}
     
     ventas_total = int(filtro['cantidad'].sum()) if 'cantidad' in filtro.columns else 0
     
-    ventas_2024 = 0
-    ventas_2025 = 0
+    ventas_año1 = 0
+    ventas_año2 = 0
     
     if 'anio' in filtro.columns:
-        ventas_2024 = int(filtro[filtro['anio'] == 2024]['cantidad'].sum()) if 2024 in filtro['anio'].values else 0
-        ventas_2025 = int(filtro[filtro['anio'] == 2025]['cantidad'].sum()) if 2025 in filtro['anio'].values else 0
+        ventas_año1 = int(filtro[filtro['anio'] == año1]['cantidad'].sum()) if año1 in filtro['anio'].values else 0
+        ventas_año2 = int(filtro[filtro['anio'] == año2]['cantidad'].sum()) if año2 in filtro['anio'].values else 0
     
-    if ventas_2024 > 0:
-        crecimiento = ((ventas_2025 - ventas_2024) / ventas_2024) * 100
+    if ventas_año1 > 0:
+        crecimiento = ((ventas_año2 - ventas_año1) / ventas_año1) * 100
     else:
         crecimiento = 0
     
@@ -662,16 +673,16 @@ def mostrar_kpis(filtro):
     with col2:
         st.markdown(f"""
         <div class="kpi">
-            <h3>📈 Ventas 2024</h3>
-            <div class="value">{ventas_2024:,}</div>
+            <h3>📈 Ventas {año1}</h3>
+            <div class="value">{ventas_año1:,}</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         st.markdown(f"""
         <div class="kpi">
-            <h3>🚀 Ventas 2025</h3>
-            <div class="value">{ventas_2025:,}</div>
+            <h3>🚀 Ventas {año2}</h3>
+            <div class="value">{ventas_año2:,}</div>
             <div class="growth {'growth-positive' if crecimiento >= 0 else 'growth-negative'}">
                 {crecimiento:.1f}%
             </div>
@@ -680,8 +691,8 @@ def mostrar_kpis(filtro):
     
     return {
         'total': ventas_total,
-        'v2024': ventas_2024,
-        'v2025': ventas_2025,
+        'v_año1': ventas_año1,
+        'v_año2': ventas_año2,
         'crecimiento': crecimiento
     }
 
@@ -689,13 +700,22 @@ def mostrar_kpis(filtro):
 # TABLA COMPARATIVA
 # ======================================
 
-def mostrar_tabla_comparativa(tabla_comparativa):
-    st.markdown("### 📊 Comparativo de Ventas por Producto")
-    st.markdown("*Análisis 2024 vs 2025 - Desglose por producto individual*")
+def mostrar_tabla_comparativa(tabla_comparativa, año1, año2):
+    st.markdown(f"### 📊 Comparativo de Ventas por Producto - {año1} vs {año2}")
+    st.markdown(f"*Análisis comparativo entre {año1} y {año2} - Desglose por producto individual*")
     
     if tabla_comparativa is None or len(tabla_comparativa) == 0:
         st.warning("No hay datos para mostrar")
         return
+    
+    # Identificar nombres de columnas dinámicamente
+    col_año1 = f'ventas_{año1}'
+    col_año2 = f'ventas_{año2}'
+    
+    if col_año1 not in tabla_comparativa.columns:
+        col_año1 = 'ventas_2024'
+    if col_año2 not in tabla_comparativa.columns:
+        col_año2 = 'ventas_2025'
     
     col1, col2 = st.columns([3, 1])
     with col2:
@@ -714,12 +734,12 @@ def mostrar_tabla_comparativa(tabla_comparativa):
         tabla_mostrar = tabla_comparativa.copy()
     
     tabla_display = tabla_mostrar.copy()
-    tabla_display['ventas_2024'] = tabla_display['ventas_2024'].apply(lambda x: f"{int(x):,}")
-    tabla_display['ventas_2025'] = tabla_display['ventas_2025'].apply(lambda x: f"{int(x):,}")
+    tabla_display[col_año1] = tabla_display[col_año1].apply(lambda x: f"{int(x):,}")
+    tabla_display[col_año2] = tabla_display[col_año2].apply(lambda x: f"{int(x):,}")
     tabla_display['diferencia'] = tabla_display['diferencia'].apply(lambda x: f"{int(x):,}")
     tabla_display['variacion_porcentaje'] = tabla_display['variacion_porcentaje'].apply(lambda x: f"{x:.1f}%")
     
-    tabla_display.columns = ['Producto', 'Ventas 2024', 'Ventas 2025', 'Diferencia', 'Variación %']
+    tabla_display.columns = ['Producto', f'Ventas {año1}', f'Ventas {año2}', 'Diferencia', 'Variación %']
     
     def color_variacion(val):
         if isinstance(val, str) and '%' in val and val != '0.0%':
@@ -739,29 +759,37 @@ def mostrar_tabla_comparativa(tabla_comparativa):
     
     total_row_data = tabla_comparativa[tabla_comparativa['producto'] == '**TOTAL**']
     if len(total_row_data) > 0:
-        total_2024 = int(total_row_data['ventas_2024'].iloc[0])
-        total_2025 = int(total_row_data['ventas_2025'].iloc[0])
+        total_año1 = int(total_row_data[col_año1].iloc[0])
+        total_año2 = int(total_row_data[col_año2].iloc[0])
         total_var = total_row_data['variacion_porcentaje'].iloc[0]
         
         st.info(f"📊 **Resumen:** {len(tabla_comparativa)-1} productos | "
-               f"Total 2024: {total_2024:,} | "
-               f"Total 2025: {total_2025:,} | "
+               f"Total {año1}: {total_año1:,} | "
+               f"Total {año2}: {total_año2:,} | "
                f"Variación: {total_var:.1f}%")
 
 # ======================================
 # TOP PRODUCTOS GRÁFICO
 # ======================================
 
-def mostrar_top_productos_grafico(tabla_comparativa):
-    st.markdown("### 🏆 Top 10 Productos más Vendidos")
+def mostrar_top_productos_grafico(tabla_comparativa, año1, año2):
+    st.markdown(f"### 🏆 Top 10 Productos más Vendidos - {año1} vs {año2}")
     
     if tabla_comparativa is None or len(tabla_comparativa) == 0:
         st.info("No hay datos suficientes")
         return
     
+    col_año1 = f'ventas_{año1}'
+    col_año2 = f'ventas_{año2}'
+    
+    if col_año1 not in tabla_comparativa.columns:
+        col_año1 = 'ventas_2024'
+    if col_año2 not in tabla_comparativa.columns:
+        col_año2 = 'ventas_2025'
+    
     top_productos = tabla_comparativa[
         (tabla_comparativa['producto'] != '**TOTAL**') & 
-        (tabla_comparativa['ventas_2024'] > 0)
+        (tabla_comparativa[col_año1] > 0)
     ].head(10).copy()
     
     if len(top_productos) > 0:
@@ -770,25 +798,25 @@ def mostrar_top_productos_grafico(tabla_comparativa):
         productos_short = top_productos['producto'].apply(lambda x: x[:40] + '...' if len(x) > 40 else x)
         
         fig.add_trace(go.Bar(
-            name='Ventas 2024',
+            name=str(año1),
             x=productos_short,
-            y=top_productos['ventas_2024'],
+            y=top_productos[col_año1],
             marker_color='#3b82f6',
-            text=top_productos['ventas_2024'],
+            text=top_productos[col_año1],
             textposition='outside'
         ))
         
         fig.add_trace(go.Bar(
-            name='Ventas 2025',
+            name=str(año2),
             x=productos_short,
-            y=top_productos['ventas_2025'],
+            y=top_productos[col_año2],
             marker_color='#ef4444',
-            text=top_productos['ventas_2025'],
+            text=top_productos[col_año2],
             textposition='outside'
         ))
         
         fig.update_layout(
-            title="Top 10 Productos más vendidos",
+            title=f"Top 10 Productos más vendidos - {año1} vs {año2}",
             template='plotly_white',
             height=500,
             barmode='group',
@@ -805,7 +833,7 @@ def mostrar_top_productos_grafico(tabla_comparativa):
 # BOTONES DE EXPORTACIÓN
 # ======================================
 
-def botones_exportacion(df, tabla_comparativa, kpis, filtros_aplicados):
+def botones_exportacion(df, tabla_comparativa, kpis, filtros_aplicados, año1, año2):
     col1, col2 = st.columns(2)
     
     with col1:
@@ -820,7 +848,7 @@ def botones_exportacion(df, tabla_comparativa, kpis, filtros_aplicados):
     with col2:
         if st.button("📄 Exportar a PDF", use_container_width=True):
             with st.spinner("Generando PDF..."):
-                pdf_data = exportar_pdf(tabla_comparativa, kpis, filtros_aplicados)
+                pdf_data = exportar_pdf(tabla_comparativa, kpis, filtros_aplicados, año1, año2)
                 b64 = base64.b64encode(pdf_data).decode()
                 href = f'<a href="data:application/pdf;base64,{b64}" download="reporte_comparativo.pdf">📥 Descargar PDF</a>'
                 st.markdown(href, unsafe_allow_html=True)
@@ -837,8 +865,8 @@ def main():
     with st.sidebar:
         st.markdown("### 📁 Datos")
         
-        archivo_2024 = st.file_uploader("📂 Año Anterior", type=['xlsx', 'xls'], key="2024")
-        archivo_2025 = st.file_uploader("📂 Año Actual", type=['xlsx', 'xls'], key="2025")
+        archivo_2024 = st.file_uploader("📂 Ventas 2024", type=['xlsx', 'xls'], key="2024")
+        archivo_2025 = st.file_uploader("📂 Ventas 2025", type=['xlsx', 'xls'], key="2025")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -862,7 +890,7 @@ def main():
                 with st.spinner("Cargando ejemplo..."):
                     np.random.seed(42)
                     productos_ejemplo = [f"Producto_{i}" for i in range(1, 51)]
-                    fechas = pd.date_range('2024-01-01', '2025-12-31', freq='D')
+                    fechas = pd.date_range('2024-01-01', '2026-12-31', freq='D')
                     data = []
                     for fecha in fechas:
                         for _ in range(np.random.randint(5, 20)):
@@ -893,7 +921,7 @@ def main():
         <div style="text-align: center; padding: 3rem;">
             <h1>📊 Dashboard Comparativo de Ventas</h1>
             <p style="color: #64748b; font-size: 1.1rem;">
-                Análisis 2024 vs 2025 por producto con filtros avanzados de tiempo
+                Análisis comparativo entre años por producto con filtros avanzados
             </p>
             <div style="margin-top: 2rem;">
                 <p style="color: #3b82f6;">Carga tus archivos Excel en el menú lateral</p>
@@ -903,19 +931,19 @@ def main():
         
         with st.expander("📖 Instrucciones", expanded=False):
             st.markdown("""
-            ### Filtros disponibles:
+            ### Comparación entre años:
             
-            **Filtros de tiempo:**
-            - 📅 **Años**: Selecciona 2024, 2025 o ambos
-            - 📆 **Calendario**: Rango de fechas personalizado
-            - 📆 **Meses**: Selecciona meses específicos
+            **Selecciona los años a comparar:**
+            - Puedes comparar cualquier par de años disponibles (ej: 2024 vs 2025, 2025 vs 2026)
+            
+            **Filtros disponibles:**
+            - 📅 **Años**: Selecciona qué años quieres comparar
+            - 📆 **Meses**: Filtra por meses específicos
             - 📆 **Días**: Filtra por días específicos o rango de días
-            
-            **Filtros comerciales:**
             - 🏷️ **Marcas**: Filtra por una o múltiples marcas
             
             **Análisis:**
-            - Comparativo 2024 vs 2025 por producto
+            - Tabla comparativa producto por producto
             - Gráficos mensuales y diarios
             - Exportación a Excel y PDF
             """)
@@ -928,7 +956,7 @@ def main():
             return
         
         # Aplicar filtros avanzados
-        filtro, filtros_aplicados = aplicar_filtros_avanzados(df)
+        filtro, filtros_aplicados, año1, año2 = aplicar_filtros_avanzados(df)
         
         if len(filtro) == 0:
             st.warning("⚠️ No hay datos con los filtros seleccionados")
@@ -957,15 +985,15 @@ def main():
         productos_unicos = filtro[columna_producto].nunique()
         st.sidebar.success(f"📦 **{productos_unicos}** productos únicos")
         
-        # Crear tabla comparativa
-        tabla_comparativa = crear_tabla_comparativa(filtro, columna_producto, top_n=None)
+        # Crear tabla comparativa con los años seleccionados
+        tabla_comparativa, años_usados = crear_tabla_comparativa(filtro, columna_producto, año1, año2, top_n=None)
         
         if tabla_comparativa is None or len(tabla_comparativa) == 0:
-            st.warning(f"❌ No se pudieron generar datos")
+            st.warning(f"❌ No se pudieron generar datos para la comparación {año1} vs {año2}")
             return
         
         # Título
-        st.markdown("# 📊 Dashboard Comparativo de Ventas")
+        st.markdown(f"# 📊 Dashboard Comparativo de Ventas - {año1} vs {año2}")
         st.caption(f"📅 Actualizado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         st.caption(f"📦 Analizando **{len(tabla_comparativa)-1}** productos")
         
@@ -977,27 +1005,27 @@ def main():
         st.markdown("---")
         
         # KPIs
-        kpis = mostrar_kpis(filtro)
+        kpis = mostrar_kpis(filtro, año1, año2)
         
         # Botones exportación
-        botones_exportacion(filtro, tabla_comparativa, kpis, filtros_aplicados)
+        botones_exportacion(filtro, tabla_comparativa, kpis, filtros_aplicados, año1, año2)
         
         st.markdown("---")
         
         # Gráficos de tiempo
-        mostrar_grafico_mensual(filtro)
+        mostrar_grafico_mensual(filtro, año1, año2)
         st.markdown("---")
-        mostrar_grafico_diario(filtro)
+        mostrar_grafico_diario(filtro, año1, año2)
         
         st.markdown("---")
         
         # Tabla comparativa
-        mostrar_tabla_comparativa(tabla_comparativa)
+        mostrar_tabla_comparativa(tabla_comparativa, año1, año2)
         
         st.markdown("---")
         
         # Top productos gráfico
-        mostrar_top_productos_grafico(tabla_comparativa)
+        mostrar_top_productos_grafico(tabla_comparativa, año1, año2)
         
         st.markdown("---")
         
@@ -1005,9 +1033,9 @@ def main():
         with st.expander("🔍 Vista previa de los datos", expanded=False):
             st.dataframe(filtro.head(100), use_container_width=True)
         
-        st.markdown("""
+        st.markdown(f"""
         <div class="footer">
-            Dashboard Comparativo de Ventas | Filtros por año, mes, día y calendario | Desarrollado con Streamlit
+            Dashboard Comparativo de Ventas | Análisis {año1} vs {año2} | Filtros por mes, día y marca
         </div>
         """, unsafe_allow_html=True)
 
