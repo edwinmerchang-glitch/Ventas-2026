@@ -193,6 +193,10 @@ def limpiar_dataframe(df):
         df = df[(df['anio'] >= 2000) & (df['anio'] <= 2030)]
         df['anio'] = df['anio'].astype(int)
     
+    # Asegurar que la columna de producto sea string
+    if 'producto' in df.columns:
+        df['producto'] = df['producto'].fillna('No especificado').astype(str)
+    
     return df
 
 @st.cache_data(ttl=3600)
@@ -229,6 +233,9 @@ def crear_tabla_comparativa(df, columna_producto, año1=None, año2=None, top_n=
     if 'anio' not in df.columns:
         st.error("❌ La columna 'anio' no existe en los datos")
         return pd.DataFrame(), []
+    
+    # Asegurar que la columna de producto sea string
+    df[columna_producto] = df[columna_producto].fillna('No especificado').astype(str)
     
     # Obtener años disponibles
     años_disponibles = sorted(df['anio'].unique())
@@ -628,11 +635,14 @@ def exportar_pdf(tabla_comparativa, kpis, filtros_aplicados, año1, año2):
         pdf.cell(35, 8, "Variación %", 1, 1, 'C')
         
         pdf.set_font("Arial", "", 8)
+        col_año1 = f'ventas_{año1}'
+        col_año2 = f'ventas_{año2}'
+        
         for _, row in tabla_comparativa.head(25).iterrows():
-            producto = row['producto'][:45] if row['producto'] != '**TOTAL**' else row['producto']
+            producto = str(row['producto'])[:45] if row['producto'] != '**TOTAL**' else row['producto']
             pdf.cell(70, 7, producto, 1, 0)
-            pdf.cell(25, 7, f"{int(row['ventas_2024'] if 'ventas_2024' in row else row['ventas_' + str(año1)]):,}", 1, 0, 'R')
-            pdf.cell(25, 7, f"{int(row['ventas_2025'] if 'ventas_2025' in row else row['ventas_' + str(año2)]):,}", 1, 0, 'R')
+            pdf.cell(25, 7, f"{int(row[col_año1]):,}", 1, 0, 'R')
+            pdf.cell(25, 7, f"{int(row[col_año2]):,}", 1, 0, 'R')
             pdf.cell(25, 7, f"{int(row['diferencia']):,}", 1, 0, 'R')
             pdf.cell(35, 7, f"{row['variacion_porcentaje']:.1f}%", 1, 1, 'R')
     
@@ -697,6 +707,22 @@ def mostrar_kpis(filtro, año1, año2):
     }
 
 # ======================================
+# FUNCIÓN PARA FORMATEAR PRODUCTOS (CORREGIDA)
+# ======================================
+
+def formatear_producto(valor):
+    """Formatea un valor de producto a string seguro"""
+    if pd.isna(valor):
+        return "No especificado"
+    try:
+        texto = str(valor)
+        if len(texto) > 40:
+            return texto[:40] + '...'
+        return texto
+    except:
+        return "Producto"
+
+# ======================================
 # TABLA COMPARATIVA
 # ======================================
 
@@ -713,9 +739,8 @@ def mostrar_tabla_comparativa(tabla_comparativa, año1, año2):
     col_año2 = f'ventas_{año2}'
     
     if col_año1 not in tabla_comparativa.columns:
-        col_año1 = 'ventas_2024'
-    if col_año2 not in tabla_comparativa.columns:
-        col_año2 = 'ventas_2025'
+        st.error(f"No se encontró la columna {col_año1}")
+        return
     
     col1, col2 = st.columns([3, 1])
     with col2:
@@ -769,7 +794,7 @@ def mostrar_tabla_comparativa(tabla_comparativa, año1, año2):
                f"Variación: {total_var:.1f}%")
 
 # ======================================
-# TOP PRODUCTOS GRÁFICO
+# TOP PRODUCTOS GRÁFICO (CORREGIDO)
 # ======================================
 
 def mostrar_top_productos_grafico(tabla_comparativa, año1, año2):
@@ -783,9 +808,8 @@ def mostrar_top_productos_grafico(tabla_comparativa, año1, año2):
     col_año2 = f'ventas_{año2}'
     
     if col_año1 not in tabla_comparativa.columns:
-        col_año1 = 'ventas_2024'
-    if col_año2 not in tabla_comparativa.columns:
-        col_año2 = 'ventas_2025'
+        st.info(f"No hay datos para {año1}")
+        return
     
     top_productos = tabla_comparativa[
         (tabla_comparativa['producto'] != '**TOTAL**') & 
@@ -795,7 +819,17 @@ def mostrar_top_productos_grafico(tabla_comparativa, año1, año2):
     if len(top_productos) > 0:
         fig = go.Figure()
         
-        productos_short = top_productos['producto'].apply(lambda x: x[:40] + '...' if len(x) > 40 else x)
+        # Convertir productos a string de forma segura
+        productos_short = []
+        for producto in top_productos['producto']:
+            try:
+                texto = str(producto)
+                if len(texto) > 40:
+                    productos_short.append(texto[:40] + '...')
+                else:
+                    productos_short.append(texto)
+            except:
+                productos_short.append("Producto")
         
         fig.add_trace(go.Bar(
             name=str(año1),
