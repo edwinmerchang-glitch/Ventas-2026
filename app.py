@@ -899,8 +899,8 @@ def main():
     with st.sidebar:
         st.markdown("### 📁 Datos")
         
-        archivo_2024 = st.file_uploader("📂 Ventas 2024", type=['xlsx', 'xls'], key="2024")
-        archivo_2025 = st.file_uploader("📂 Ventas 2025", type=['xlsx', 'xls'], key="2025")
+        archivo_2024 = st.file_uploader("📂 Año Anterior", type=['xlsx', 'xls'], key="2024")
+        archivo_2025 = st.file_uploader("📂 Año Actual", type=['xlsx', 'xls'], key="2025")
         
         col1, col2 = st.columns(2)
         with col1:
